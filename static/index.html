@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISO 27001:2022 Gap Analysis</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="/static/js/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <span class="brand-icon">🔐</span>
+    <span class="brand-text">ISO 27001<br><small>Gap Analysis</small></span>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#" class="nav-item active" data-view="home">
+      <span class="nav-icon">🏠</span> Inicio
+    </a>
+    <a href="#" class="nav-item" data-view="evaluacion">
+      <span class="nav-icon">📋</span> Evaluación
+    </a>
+    <a href="#" class="nav-item" data-view="stats">
+      <span class="nav-icon">📊</span> Resultados
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <small>ISO/IEC 27001:2022<br>93 controles · 4 dominios</small>
+  </div>
+</aside>
+
+<!-- ── Main ────────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- Vista: Home -->
+  <div id="view-home" class="view active">
+    <div class="page-header">
+      <h1>Gap Analysis ISO 27001:2022</h1>
+      <p class="subtitle">Evaluá la madurez de controles de seguridad de tu organización frente al estándar internacional.</p>
+    </div>
+
+    <div class="card-row">
+      <div class="info-card">
+        <div class="info-icon">📋</div>
+        <div class="info-title">93 Controles</div>
+        <div class="info-desc">Cobertura completa del Anexo A de ISO/IEC 27001:2022</div>
+      </div>
+      <div class="info-card">
+        <div class="info-icon">🏗️</div>
+        <div class="info-title">4 Dominios</div>
+        <div class="info-desc">Organizacional · Personas · Físico · Tecnológico</div>
+      </div>
+      <div class="info-card">
+        <div class="info-icon">📊</div>
+        <div class="info-title">Escala CMMI</div>
+        <div class="info-desc">Madurez de 0 (Inexistente) a 5 (Optimizado)</div>
+      </div>
+      <div class="info-card">
+        <div class="info-icon">📄</div>
+        <div class="info-title">Reporte PDF</div>
+        <div class="info-desc">Exportá el análisis con roadmap de remediación priorizado</div>
+      </div>
+    </div>
+
+    <div class="section-title">Evaluaciones existentes</div>
+    <div id="lista-evaluaciones"></div>
+
+    <button class="btn btn-primary" id="btn-nueva">+ Nueva evaluación</button>
+
+    <!-- Modal nueva evaluación -->
+    <div id="modal-nueva" class="modal hidden">
+      <div class="modal-box">
+        <h2>Nueva evaluación</h2>
+        <label>Nombre de la evaluación</label>
+        <input type="text" id="inp-nombre" placeholder="Ej: Evaluación inicial Q1 2025" />
+        <label>Empresa / Organización</label>
+        <input type="text" id="inp-empresa" placeholder="Nombre de la empresa" />
+        <label>Alcance (opcional)</label>
+        <textarea id="inp-alcance" rows="2" placeholder="Ej: Infraestructura cloud y sistemas corporativos"></textarea>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btn-cancelar-modal">Cancelar</button>
+          <button class="btn btn-primary" id="btn-crear">Crear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vista: Evaluación -->
+  <div id="view-evaluacion" class="view">
+    <div class="page-header row-between">
+      <div>
+        <h1 id="eval-titulo">Evaluación</h1>
+        <p class="subtitle" id="eval-empresa"></p>
+      </div>
+      <div class="header-actions">
+        <div class="progress-badge">
+          <span id="progreso-pct">0%</span>
+          <span class="progress-label">completado</span>
+        </div>
+        <button class="btn btn-success" id="btn-ver-stats">Ver resultados</button>
+        <button class="btn btn-outline" id="btn-pdf">📄 Descargar PDF</button>
+      </div>
+    </div>
+
+    <!-- Tabs de dominios -->
+    <div class="tab-bar" id="tab-bar"></div>
+
+    <!-- Contenido del dominio activo -->
+    <div id="controles-panel"></div>
+  </div>
+
+  <!-- Vista: Stats -->
+  <div id="view-stats" class="view">
+    <div class="page-header row-between">
+      <div>
+        <h1>Resultados — <span id="stats-titulo"></span></h1>
+        <p class="subtitle" id="stats-empresa"></p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" id="btn-pdf-stats">📄 Descargar PDF</button>
+        <button class="btn btn-secondary" id="btn-back-eval">← Volver a evaluación</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card accent-blue">
+        <div class="stat-val" id="stat-madurez">—</div>
+        <div class="stat-lbl">Madurez global /5</div>
+      </div>
+      <div class="stat-card accent-green">
+        <div class="stat-val" id="stat-respondidos">—</div>
+        <div class="stat-lbl">Controles evaluados</div>
+      </div>
+      <div class="stat-card accent-orange">
+        <div class="stat-val" id="stat-brechas">—</div>
+        <div class="stat-lbl">Brechas identificadas</div>
+      </div>
+      <div class="stat-card accent-purple">
+        <div class="stat-val" id="stat-pct">—</div>
+        <div class="stat-lbl">% completitud</div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Madurez por dominio</div>
+        <canvas id="chart-radar"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Distribución de controles por nivel</div>
+        <canvas id="chart-bar"></canvas>
+      </div>
+    </div>
+
+    <div class="section-title">Brechas críticas (madurez &lt; 3)</div>
+    <div id="tabla-brechas"></div>
+  </div>
+
+</main>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

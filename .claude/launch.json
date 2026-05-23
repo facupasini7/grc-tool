@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "iso27001-gap-analysis",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["run.py"],
+      "port": 8090
+    }
+  ]
+}
