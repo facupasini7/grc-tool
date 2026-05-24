@@ -723,7 +723,8 @@ body {
 /* Dominios accordion */
 .cob-dominio {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+  border-radius: 12px; margin-bottom: 12px;
+  /* overflow:hidden eliminado — cortaba los dropdowns de evidencia absolutos */
 }
 .cob-dominio-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -808,14 +809,13 @@ body {
 }
 
 .ev-req-dropdown {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 50;
+  /* Posicionado por JS via position:fixed — inmune a overflow:hidden de ancestros */
+  position: fixed;
+  z-index: 999;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.14);
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
   padding: 10px 14px;
   min-width: 320px;
   max-width: 420px;

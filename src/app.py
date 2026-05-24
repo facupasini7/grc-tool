@@ -203,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif path == "/api/evaluaciones":
             with get_conn() as conn:
-                rows = conn.execute("SELECT * FROM evaluaciones ORDER BY actualizada DESC").fetchall()
+                rows = conn.execute("SELECT * FROM evaluaciones ORDER BY actualizada DESC, id DESC").fetchall()
             self.send_json([dict(r) for r in rows])
 
         elif path.startswith("/api/evaluaciones/") and "/stats" in path:
@@ -316,8 +316,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/evaluaciones":
             import json as _json
             fws = body.get("frameworks", ["ISO27001"])
-            if "ISO27001" not in fws:
-                fws = ["ISO27001"] + fws
+            if not fws:
+                fws = ["ISO27001"]
             with get_conn() as conn:
                 cur = conn.execute(
                     "INSERT INTO evaluaciones (nombre, empresa, alcance, frameworks) VALUES (?,?,?,?)",

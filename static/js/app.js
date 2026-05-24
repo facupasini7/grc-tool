@@ -94,8 +94,9 @@ document.getElementById("fw-modal-grid").addEventListener("click", e => {
 });
 
 document.getElementById("btn-nueva").addEventListener("click", () => {
-  // Resetear cards (deseleccionar todas excepto ISO27001)
-  document.querySelectorAll(".fw-modal-card:not(.locked)").forEach(c => c.classList.remove("selected"));
+  // Resetear: deseleccionar todas, luego seleccionar ISO27001 por defecto
+  document.querySelectorAll(".fw-modal-card").forEach(c => c.classList.remove("selected"));
+  document.querySelector('.fw-modal-card[data-fw="ISO27001"]').classList.add("selected");
   document.getElementById("modal-nueva").classList.remove("hidden");
 });
 document.getElementById("btn-cancelar-modal").addEventListener("click", () => {
@@ -108,11 +109,15 @@ document.getElementById("btn-crear").addEventListener("click", async () => {
   const alcance = document.getElementById("inp-alcance").value.trim();
   if (!nombre || !empresa) { alert("Nombre y empresa son requeridos."); return; }
 
-  // Recoger frameworks seleccionados
-  const frameworks = ["ISO27001"];
-  document.querySelectorAll(".fw-modal-card.selected:not(.locked)").forEach(c => {
+  // Recoger frameworks seleccionados (todos los que estén activos)
+  const frameworks = [];
+  document.querySelectorAll(".fw-modal-card.selected").forEach(c => {
     frameworks.push(c.dataset.fw);
   });
+  if (frameworks.length === 0) {
+    alert("Seleccioná al menos un framework para la evaluación.");
+    return;
+  }
 
   const { id } = await fetch(`${API}/api/evaluaciones`, {
     method: "POST",

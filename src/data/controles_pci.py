@@ -27,6 +27,12 @@ CONTROLES_PCI = [
         "dominio": "R1",
         "referencia": "PCI DSS v4.0 - Requisito 1.1",
         "iso_mapping": ["A.5.1", "A.8.20"],
+        "evidencia_requerida": [
+            "Política de seguridad de red documentada y aprobada",
+            "Diagramas de red actualizados que incluyen el CDE y todos los flujos de datos de titulares",
+            "Inventario de componentes de red (firewalls, routers, switches) en el CDE",
+            "Registro de revisiones periódicas de los controles de red",
+        ],
     },
     {
         "id": "PCI-1.2",
@@ -35,6 +41,13 @@ CONTROLES_PCI = [
         "dominio": "R1",
         "referencia": "PCI DSS v4.0 - Requisito 1.2",
         "iso_mapping": ["A.8.20", "A.8.21", "A.8.22"],
+        "evidencia_requerida": [
+            "Ruleset actual de firewall/router con justificación de negocio para cada regla",
+            "Registro de la última revisión de reglas de firewall (máx. 6 meses)",
+            "Evidencia de regla 'denegar todo' por defecto en firewalls perimetrales",
+            "Diagramas de flujo de tráfico entre zonas confiables y no confiables",
+            "Actas de revisión semestral de reglas de firewall",
+        ],
     },
     {
         "id": "PCI-1.3",
@@ -43,6 +56,12 @@ CONTROLES_PCI = [
         "dominio": "R1",
         "referencia": "PCI DSS v4.0 - Requisito 1.3",
         "iso_mapping": ["A.8.20", "A.8.21"],
+        "evidencia_requerida": [
+            "Configuración de firewall que restringe el acceso entrante/saliente al CDE",
+            "Lista blanca de servicios y puertos permitidos hacia el CDE con justificación de negocio",
+            "Capturas de pantalla o exportación de reglas de firewall vigentes",
+            "Prueba de que todo el tráfico no autorizado es bloqueado (test results)",
+        ],
     },
     {
         "id": "PCI-1.4",
@@ -51,6 +70,12 @@ CONTROLES_PCI = [
         "dominio": "R1",
         "referencia": "PCI DSS v4.0 - Requisito 1.4",
         "iso_mapping": ["A.8.20", "A.8.22"],
+        "evidencia_requerida": [
+            "Configuración de stateful inspection en firewalls del CDE",
+            "Política de acceso remoto con controles de seguridad para dispositivos remotos",
+            "Registro de soluciones de seguridad en dispositivos de acceso remoto (VPN, firewall personal)",
+            "Evidencia de controles anti-spoofing implementados",
+        ],
     },
     {
         "id": "PCI-1.5",
@@ -59,6 +84,12 @@ CONTROLES_PCI = [
         "dominio": "R1",
         "referencia": "PCI DSS v4.0 - Requisito 1.5",
         "iso_mapping": ["A.6.7", "A.8.20"],
+        "evidencia_requerida": [
+            "Política de seguridad para teletrabajo y acceso remoto",
+            "Inventario de dispositivos autorizados para conectarse al CDE de forma remota",
+            "Configuración de VPN split-tunnel o full-tunnel con controles de firewall",
+            "Evidencia de firewall personal activo en dispositivos de acceso remoto",
+        ],
     },
 
     # ── R2: Aplicar configuraciones seguras ───────────────────────────────
@@ -69,6 +100,12 @@ CONTROLES_PCI = [
         "dominio": "R2",
         "referencia": "PCI DSS v4.0 - Requisito 2.1",
         "iso_mapping": ["A.5.1", "A.8.9"],
+        "evidencia_requerida": [
+            "Estándares de hardening documentados por tipo de componente (SO, BBDD, aplicaciones, red)",
+            "Política de gestión de configuraciones de seguridad aprobada",
+            "Inventario de todos los componentes del sistema en el CDE",
+            "Proceso documentado de revisión y actualización de estándares de configuración",
+        ],
     },
     {
         "id": "PCI-2.2",
@@ -77,6 +114,13 @@ CONTROLES_PCI = [
         "dominio": "R2",
         "referencia": "PCI DSS v4.0 - Requisito 2.2",
         "iso_mapping": ["A.8.9", "A.5.17"],
+        "evidencia_requerida": [
+            "Resultados de escaneo de configuración contra baseline de hardening (CIS Benchmark o similar)",
+            "Evidencia de cambio de credenciales por defecto en todos los componentes del CDE",
+            "Lista de servicios, puertos y protocolos habilitados con justificación de negocio",
+            "Guías de hardening aplicadas con registro de implementación",
+            "Checklist de configuración segura completado para cada tipo de sistema",
+        ],
     },
     {
         "id": "PCI-2.3",
@@ -85,6 +129,12 @@ CONTROLES_PCI = [
         "dominio": "R2",
         "referencia": "PCI DSS v4.0 - Requisito 2.3",
         "iso_mapping": ["A.8.9", "A.8.20"],
+        "evidencia_requerida": [
+            "Inventario de todos los access points y dispositivos inalámbricos en o cerca del CDE",
+            "Configuración de cifrado inalámbrico (WPA3/WPA2-Enterprise) en todos los APs",
+            "Evidencia de cambio de claves y SSIDs por defecto",
+            "Política de uso de redes inalámbricas en el CDE",
+        ],
     },
 
     # ── R3: Proteger los datos de cuenta almacenados ───────────────────────
@@ -95,6 +145,12 @@ CONTROLES_PCI = [
         "dominio": "R3",
         "referencia": "PCI DSS v4.0 - Requisito 3.1",
         "iso_mapping": ["A.5.1", "A.5.10"],
+        "evidencia_requerida": [
+            "Política de retención y eliminación de datos de titulares de tarjetas",
+            "Inventario de todos los lugares donde se almacenan datos de titulares (data flow diagram)",
+            "Proceso documentado de descubrimiento y eliminación de datos de tarjetas no necesarios",
+            "Resultados de scans de descubrimiento de PAN en sistemas del CDE",
+        ],
     },
     {
         "id": "PCI-3.2",
@@ -103,6 +159,12 @@ CONTROLES_PCI = [
         "dominio": "R3",
         "referencia": "PCI DSS v4.0 - Requisito 3.2",
         "iso_mapping": ["A.5.10", "A.8.10"],
+        "evidencia_requerida": [
+            "Evidencia técnica de que no se almacena SAD (track data, CVV, PIN) post-autorización",
+            "Resultados de pruebas de bases de datos y logs buscando datos de autenticación sensibles",
+            "Proceso y registros de eliminación periódica de datos de titulares según política de retención",
+            "Certificados de eliminación segura de datos",
+        ],
     },
     {
         "id": "PCI-3.3",
@@ -111,6 +173,12 @@ CONTROLES_PCI = [
         "dominio": "R3",
         "referencia": "PCI DSS v4.0 - Requisito 3.3",
         "iso_mapping": ["A.8.10", "A.8.12"],
+        "evidencia_requerida": [
+            "Revisión de código fuente o arquitectura que demuestre no almacenamiento de SAD",
+            "Resultados de pruebas de penetración específicas para detectar SAD almacenado",
+            "Configuración de aplicaciones de pago que impide logging de SAD",
+            "Actas de revisión de bases de datos y archivos de log en busca de SAD",
+        ],
     },
     {
         "id": "PCI-3.4",
@@ -119,6 +187,12 @@ CONTROLES_PCI = [
         "dominio": "R3",
         "referencia": "PCI DSS v4.0 - Requisito 3.4",
         "iso_mapping": ["A.8.24"],
+        "evidencia_requerida": [
+            "Evidencia de truncamiento o tokenización de PAN en bases de datos y sistemas",
+            "Certificación del proveedor de tokenización (si aplica)",
+            "Resultados de scan de PAN en sistemas del CDE (solo primeros 6 / últimos 4 dígitos visibles)",
+            "Configuración de enmascaramiento de PAN en pantallas e informes",
+        ],
     },
     {
         "id": "PCI-3.5",
@@ -127,6 +201,13 @@ CONTROLES_PCI = [
         "dominio": "R3",
         "referencia": "PCI DSS v4.0 - Requisito 3.5",
         "iso_mapping": ["A.8.24"],
+        "evidencia_requerida": [
+            "Documentación del algoritmo criptográfico utilizado (AES-256, RSA-2048 o superior)",
+            "Política y procedimientos de gestión de claves criptográficas (generación, distribución, almacenamiento, rotación, revocación)",
+            "Evidencia de separación de roles en gestión de claves (split knowledge/dual control)",
+            "Registros de rotación de claves criptográficas",
+            "Inventario de claves criptográficas con clasificación y estado",
+        ],
     },
 
     # ── R4: Proteger datos de titulares en transmisión ────────────────────
@@ -137,6 +218,11 @@ CONTROLES_PCI = [
         "dominio": "R4",
         "referencia": "PCI DSS v4.0 - Requisito 4.1",
         "iso_mapping": ["A.5.1", "A.8.24"],
+        "evidencia_requerida": [
+            "Política de cifrado en tránsito documentada para datos de titulares",
+            "Inventario de todas las transmisiones de PAN sobre redes abiertas/públicas",
+            "Diagrama de flujo de datos con protocolos de cifrado identificados",
+        ],
     },
     {
         "id": "PCI-4.2",
@@ -145,6 +231,12 @@ CONTROLES_PCI = [
         "dominio": "R4",
         "referencia": "PCI DSS v4.0 - Requisito 4.2",
         "iso_mapping": ["A.8.24"],
+        "evidencia_requerida": [
+            "Captura de escaneo SSL/TLS que muestre TLS 1.2+ habilitado y versiones vulnerables deshabilitadas",
+            "Resultado de herramienta como SSLLabs o testssl.sh contra sistemas del CDE",
+            "Evidencia de deshabilitación de SSL, TLS 1.0 y TLS 1.1",
+            "Política de prohibición de envío de PAN por email, chat o SMS sin cifrar",
+        ],
     },
 
     # ── R5: Proteger todos los sistemas contra malware ────────────────────
@@ -155,6 +247,11 @@ CONTROLES_PCI = [
         "dominio": "R5",
         "referencia": "PCI DSS v4.0 - Requisito 5.1",
         "iso_mapping": ["A.5.1", "A.8.7"],
+        "evidencia_requerida": [
+            "Política de protección contra malware documentada y aprobada",
+            "Inventario de componentes del sistema que requieren protección anti-malware",
+            "Procedimiento de respuesta ante detección de malware",
+        ],
     },
     {
         "id": "PCI-5.2",
@@ -163,6 +260,12 @@ CONTROLES_PCI = [
         "dominio": "R5",
         "referencia": "PCI DSS v4.0 - Requisito 5.2",
         "iso_mapping": ["A.8.7"],
+        "evidencia_requerida": [
+            "Consola de gestión de antivirus/EDR con cobertura de todos los componentes del CDE",
+            "Evidencia de actualizaciones automáticas de firmas (últimas 24-48hs)",
+            "Logs de escaneo periódico completado en todos los sistemas",
+            "Configuración que impide a usuarios deshabilitar la solución anti-malware",
+        ],
     },
     {
         "id": "PCI-5.3",
@@ -171,6 +274,12 @@ CONTROLES_PCI = [
         "dominio": "R5",
         "referencia": "PCI DSS v4.0 - Requisito 5.3",
         "iso_mapping": ["A.8.7", "A.8.16"],
+        "evidencia_requerida": [
+            "Dashboard de estado de la solución EDR/antivirus mostrando agentes activos",
+            "Logs de actividad de la solución anti-malware de los últimos 30 días",
+            "Alertas configuradas para detección de malware y agentes desconectados",
+            "Evidencia de intentos de deshabilitación bloqueados (si aplica)",
+        ],
     },
     {
         "id": "PCI-5.4",
@@ -179,6 +288,12 @@ CONTROLES_PCI = [
         "dominio": "R5",
         "referencia": "PCI DSS v4.0 - Requisito 5.4",
         "iso_mapping": ["A.8.7", "A.6.3"],
+        "evidencia_requerida": [
+            "Configuración de filtros anti-phishing en gateway de correo electrónico",
+            "Resultados de simulaciones de phishing interno y métricas de concientización",
+            "Evidencia de capacitación anti-phishing al personal con acceso al CDE",
+            "Registros de correos bloqueados por phishing en el período bajo evaluación",
+        ],
     },
 
     # ── R6: Desarrollar y mantener sistemas y software seguros ────────────
@@ -189,6 +304,11 @@ CONTROLES_PCI = [
         "dominio": "R6",
         "referencia": "PCI DSS v4.0 - Requisito 6.1",
         "iso_mapping": ["A.5.1", "A.8.25"],
+        "evidencia_requerida": [
+            "Política de desarrollo seguro de software (SDLC seguro) documentada",
+            "Estándares de codificación segura adoptados (OWASP, CERT, etc.)",
+            "Inventario de aplicaciones del CDE con su clasificación de riesgo",
+        ],
     },
     {
         "id": "PCI-6.2",
@@ -197,6 +317,13 @@ CONTROLES_PCI = [
         "dominio": "R6",
         "referencia": "PCI DSS v4.0 - Requisito 6.2",
         "iso_mapping": ["A.8.25", "A.8.26", "A.8.27", "A.8.28"],
+        "evidencia_requerida": [
+            "Registros de code review de seguridad para aplicaciones del CDE",
+            "Certificados o evidencia de capacitación en desarrollo seguro para el equipo",
+            "Documentación de la separación de entornos (desarrollo, QA, producción)",
+            "Resultados de análisis estático de código (SAST) en aplicaciones del CDE",
+            "Política de manejo seguro de datos de prueba (no usar datos reales de tarjetas en desarrollo)",
+        ],
     },
     {
         "id": "PCI-6.3",
@@ -205,6 +332,12 @@ CONTROLES_PCI = [
         "dominio": "R6",
         "referencia": "PCI DSS v4.0 - Requisito 6.3",
         "iso_mapping": ["A.8.8"],
+        "evidencia_requerida": [
+            "Proceso de gestión de vulnerabilidades documentado con SLAs de remediación",
+            "Registros de aplicación de parches de seguridad en componentes del CDE (últimos 12 meses)",
+            "Evidencia de suscripción a boletines de seguridad de fabricantes relevantes",
+            "Reporte de vulnerabilidades pendientes con plan de remediación y fechas comprometidas",
+        ],
     },
     {
         "id": "PCI-6.4",
@@ -213,6 +346,12 @@ CONTROLES_PCI = [
         "dominio": "R6",
         "referencia": "PCI DSS v4.0 - Requisito 6.4",
         "iso_mapping": ["A.8.26", "A.8.29"],
+        "evidencia_requerida": [
+            "Configuración y logs del WAF (Web Application Firewall) protegiendo aplicaciones del CDE",
+            "Resultados de pruebas DAST (análisis dinámico) contra OWASP Top 10",
+            "Evidencia de revisión de código enfocada en vulnerabilidades OWASP para cambios recientes",
+            "Reporte de pruebas de seguridad previas al despliegue de cambios en aplicaciones del CDE",
+        ],
     },
     {
         "id": "PCI-6.5",
@@ -221,6 +360,12 @@ CONTROLES_PCI = [
         "dominio": "R6",
         "referencia": "PCI DSS v4.0 - Requisito 6.5",
         "iso_mapping": ["A.8.32"],
+        "evidencia_requerida": [
+            "Política y procedimiento de gestión de cambios documentado",
+            "Registros de cambios (tickets/CRs) con aprobación de seguridad antes del pase a producción",
+            "Evidencia de pruebas de seguridad incluidas en el proceso de cambio",
+            "Actas de comité de cambios o aprobaciones formales de cambios en el CDE",
+        ],
     },
 
     # ── R7: Restringir acceso a componentes del sistema ───────────────────
@@ -231,6 +376,11 @@ CONTROLES_PCI = [
         "dominio": "R7",
         "referencia": "PCI DSS v4.0 - Requisito 7.1",
         "iso_mapping": ["A.5.1", "A.5.15"],
+        "evidencia_requerida": [
+            "Política de control de acceso basada en least-privilege y need-to-know",
+            "Matriz de roles y permisos documentada para el CDE",
+            "Proceso de aprobación de acceso documentado",
+        ],
     },
     {
         "id": "PCI-7.2",
@@ -239,6 +389,12 @@ CONTROLES_PCI = [
         "dominio": "R7",
         "referencia": "PCI DSS v4.0 - Requisito 7.2",
         "iso_mapping": ["A.5.15", "A.5.18", "A.8.2", "A.8.3"],
+        "evidencia_requerida": [
+            "Reporte de revisión de accesos al CDE de los últimos 6 meses con aprobación gerencial",
+            "Listado de usuarios y roles en sistemas del CDE mostrando least-privilege",
+            "Evidencia de configuración 'denegar todo por defecto' en sistemas del CDE",
+            "Registros de accesos revocados al momento de baja o cambio de rol",
+        ],
     },
     {
         "id": "PCI-7.3",
@@ -247,6 +403,12 @@ CONTROLES_PCI = [
         "dominio": "R7",
         "referencia": "PCI DSS v4.0 - Requisito 7.3",
         "iso_mapping": ["A.5.15", "A.8.2", "A.8.4"],
+        "evidencia_requerida": [
+            "Demostración del sistema de gestión de accesos (IAM/PAM) utilizado",
+            "Evidencia de asignación de accesos mediante sistema formal (no manual)",
+            "Logs de cambios de privilegios con aprobación formal",
+            "Reporte de cuentas con acceso privilegiado al CDE",
+        ],
     },
 
     # ── R8: Identificar usuarios y autenticar el acceso ───────────────────
@@ -257,6 +419,11 @@ CONTROLES_PCI = [
         "dominio": "R8",
         "referencia": "PCI DSS v4.0 - Requisito 8.1",
         "iso_mapping": ["A.5.1", "A.5.16"],
+        "evidencia_requerida": [
+            "Política de identificación y autenticación documentada",
+            "Procedimiento de alta/baja/modificación de cuentas de usuario en el CDE",
+            "Inventario de todos los usuarios con acceso al CDE (humanos y de servicio)",
+        ],
     },
     {
         "id": "PCI-8.2",
@@ -265,6 +432,12 @@ CONTROLES_PCI = [
         "dominio": "R8",
         "referencia": "PCI DSS v4.0 - Requisito 8.2",
         "iso_mapping": ["A.5.16", "A.5.18", "A.8.2"],
+        "evidencia_requerida": [
+            "Reporte de cuentas de usuario mostrando IDs únicos (sin cuentas compartidas)",
+            "Evidencia de deshabilitación de cuentas inactivas en ≤90 días (reporte o script)",
+            "Registros del proceso de alta, baja y modificación de cuentas en el período",
+            "Lista de ex-empleados con fecha de baja y fecha de deshabilitación de cuenta",
+        ],
     },
     {
         "id": "PCI-8.3",
@@ -273,6 +446,12 @@ CONTROLES_PCI = [
         "dominio": "R8",
         "referencia": "PCI DSS v4.0 - Requisito 8.3",
         "iso_mapping": ["A.5.17", "A.8.5"],
+        "evidencia_requerida": [
+            "Configuración de política de contraseñas (longitud mínima, complejidad, historial, expiración)",
+            "Evidencia de bloqueo de cuenta tras intentos fallidos configurado (≤10 intentos)",
+            "Captura de pantalla de configuración de Active Directory / LDAP / IdP con política de contraseñas",
+            "Registro de último cambio de contraseñas de cuentas privilegiadas",
+        ],
     },
     {
         "id": "PCI-8.4",
@@ -281,6 +460,12 @@ CONTROLES_PCI = [
         "dominio": "R8",
         "referencia": "PCI DSS v4.0 - Requisito 8.4",
         "iso_mapping": ["A.8.5"],
+        "evidencia_requerida": [
+            "Configuración de MFA en sistemas de acceso remoto al CDE (VPN, RDP, SSH)",
+            "Configuración de MFA para acceso administrativo a sistemas del CDE",
+            "Listado de usuarios con MFA habilitado vs. total de usuarios con acceso al CDE",
+            "Evidencia de que usuarios sin MFA no pueden acceder al CDE",
+        ],
     },
     {
         "id": "PCI-8.5",
@@ -289,6 +474,12 @@ CONTROLES_PCI = [
         "dominio": "R8",
         "referencia": "PCI DSS v4.0 - Requisito 8.5",
         "iso_mapping": ["A.5.17", "A.8.5"],
+        "evidencia_requerida": [
+            "Inventario de factores de autenticación emitidos (tokens, smart cards, certificados)",
+            "Proceso de recuperación/reset de credenciales con verificación de identidad documentado",
+            "Política de gestión y almacenamiento seguro de factores de autenticación",
+            "Registro de tokens/dispositivos revocados o reemplazados en el período",
+        ],
     },
     {
         "id": "PCI-8.6",
@@ -297,6 +488,12 @@ CONTROLES_PCI = [
         "dominio": "R8",
         "referencia": "PCI DSS v4.0 - Requisito 8.6",
         "iso_mapping": ["A.5.16", "A.8.2"],
+        "evidencia_requerida": [
+            "Inventario de cuentas de servicio/sistema con justificación de negocio",
+            "Evidencia de que cuentas de servicio no se usan para acceso interactivo",
+            "Política de gestión de cuentas de servicio incluyendo rotación de secretos",
+            "Configuración de PAM (Privileged Access Management) para cuentas de sistema si aplica",
+        ],
     },
 
     # ── R9: Restringir el acceso físico a los datos ───────────────────────
@@ -307,6 +504,11 @@ CONTROLES_PCI = [
         "dominio": "R9",
         "referencia": "PCI DSS v4.0 - Requisito 9.1",
         "iso_mapping": ["A.5.1", "A.7.1"],
+        "evidencia_requerida": [
+            "Política de seguridad física documentada para el CDE",
+            "Plano o descripción de la ubicación física del CDE con perímetros de seguridad",
+            "Procedimiento de gestión de acceso físico al CDE",
+        ],
     },
     {
         "id": "PCI-9.2",
@@ -315,6 +517,12 @@ CONTROLES_PCI = [
         "dominio": "R9",
         "referencia": "PCI DSS v4.0 - Requisito 9.2",
         "iso_mapping": ["A.7.1", "A.7.2", "A.7.4"],
+        "evidencia_requerida": [
+            "Fotografías o evidencia de controles de acceso físico en el CDE (lectores, cámaras, torniquetes)",
+            "Logs de acceso físico al CDE del período bajo evaluación",
+            "Configuración y grabaciones del sistema de CCTV (retención mínima 90 días)",
+            "Lista de personal autorizado al acceso físico del CDE",
+        ],
     },
     {
         "id": "PCI-9.3",
@@ -323,6 +531,12 @@ CONTROLES_PCI = [
         "dominio": "R9",
         "referencia": "PCI DSS v4.0 - Requisito 9.3",
         "iso_mapping": ["A.7.2", "A.7.3"],
+        "evidencia_requerida": [
+            "Registro de visitas al CDE del período bajo evaluación",
+            "Evidencia del sistema de identificación de visitantes (badges temporales, registro de entrada/salida)",
+            "Procedimiento de escolta de visitantes en el CDE documentado",
+            "Registro de empleados con acceso al CDE y sus credenciales de acceso físico asignadas",
+        ],
     },
     {
         "id": "PCI-9.4",
@@ -331,6 +545,12 @@ CONTROLES_PCI = [
         "dominio": "R9",
         "referencia": "PCI DSS v4.0 - Requisito 9.4",
         "iso_mapping": ["A.7.10", "A.7.14", "A.8.10"],
+        "evidencia_requerida": [
+            "Inventario de medios físicos que contienen datos de titulares",
+            "Certificados de destrucción segura de medios (shredding, degaussing) de proveedores certificados",
+            "Proceso de clasificación y etiquetado de medios con datos de titulares",
+            "Registros de autorización y control de envío de medios fuera del CDE",
+        ],
     },
     {
         "id": "PCI-9.5",
@@ -339,6 +559,12 @@ CONTROLES_PCI = [
         "dominio": "R9",
         "referencia": "PCI DSS v4.0 - Requisito 9.5",
         "iso_mapping": ["A.7.1", "A.7.9"],
+        "evidencia_requerida": [
+            "Inventario actualizado de dispositivos POI con número de serie, ubicación y responsable",
+            "Registros de inspecciones periódicas de dispositivos POI contra skimming y manipulación",
+            "Certificados de entrenamiento del personal en detección de manipulación de POI",
+            "Proceso de respuesta ante sospecha de manipulación de dispositivos POI",
+        ],
     },
 
     # ── R10: Registrar y monitorear todos los accesos ─────────────────────
@@ -349,6 +575,11 @@ CONTROLES_PCI = [
         "dominio": "R10",
         "referencia": "PCI DSS v4.0 - Requisito 10.1",
         "iso_mapping": ["A.5.1", "A.8.15"],
+        "evidencia_requerida": [
+            "Política de logging y monitoreo documentada",
+            "Inventario de componentes del CDE con logging habilitado",
+            "Procedimiento de revisión y respuesta a eventos de seguridad",
+        ],
     },
     {
         "id": "PCI-10.2",
@@ -357,6 +588,12 @@ CONTROLES_PCI = [
         "dominio": "R10",
         "referencia": "PCI DSS v4.0 - Requisito 10.2",
         "iso_mapping": ["A.8.15"],
+        "evidencia_requerida": [
+            "Muestra de logs de auditoría mostrando los 6 tipos de eventos requeridos por PCI DSS",
+            "Configuración de logging en sistemas del CDE (SO, base de datos, aplicación, red)",
+            "Evidencia de que logs de acceso administrativo están habilitados y no son modificables por el propio administrador",
+            "Reporte de cobertura de logging sobre componentes del CDE",
+        ],
     },
     {
         "id": "PCI-10.3",
@@ -365,6 +602,12 @@ CONTROLES_PCI = [
         "dominio": "R10",
         "referencia": "PCI DSS v4.0 - Requisito 10.3",
         "iso_mapping": ["A.8.15", "A.8.17"],
+        "evidencia_requerida": [
+            "Configuración de SIEM o sistema centralizado de logs con control de acceso",
+            "Evidencia de que logs son enviados a sistema centralizado inmutable (write-once)",
+            "Política de control de acceso al sistema de logs (administradores de sistema no pueden modificar sus propios logs)",
+            "Registros de backup de logs y prueba de restauración",
+        ],
     },
     {
         "id": "PCI-10.4",
@@ -373,6 +616,12 @@ CONTROLES_PCI = [
         "dominio": "R10",
         "referencia": "PCI DSS v4.0 - Requisito 10.4",
         "iso_mapping": ["A.8.16"],
+        "evidencia_requerida": [
+            "Evidencia de revisión diaria de logs (tickets generados, actas, alertas respondidas)",
+            "Configuración de reglas de correlación y alertas en SIEM para el CDE",
+            "Registros de alertas de seguridad generadas y respondidas en el período",
+            "Procedimiento documentado de revisión de logs con responsables definidos",
+        ],
     },
     {
         "id": "PCI-10.5",
@@ -381,6 +630,12 @@ CONTROLES_PCI = [
         "dominio": "R10",
         "referencia": "PCI DSS v4.0 - Requisito 10.5",
         "iso_mapping": ["A.8.15"],
+        "evidencia_requerida": [
+            "Política de retención de logs con período mínimo de 12 meses",
+            "Evidencia de logs disponibles de al menos los últimos 3 meses en línea",
+            "Evidencia de archivado de logs de meses 4-12 accesibles ante solicitud",
+            "Configuración de retención en SIEM o sistema de almacenamiento de logs",
+        ],
     },
     {
         "id": "PCI-10.6",
@@ -389,6 +644,12 @@ CONTROLES_PCI = [
         "dominio": "R10",
         "referencia": "PCI DSS v4.0 - Requisito 10.6",
         "iso_mapping": ["A.8.17"],
+        "evidencia_requerida": [
+            "Configuración de NTP en todos los sistemas del CDE apuntando a fuentes confiables",
+            "Evidencia de sincronización de tiempo funcionando (ntpq -p, chronyc tracking)",
+            "Política de gestión de tiempo documentada con fuentes NTP aprobadas",
+            "Reporte de desvíos de tiempo detectados y corregidos (si aplica)",
+        ],
     },
     {
         "id": "PCI-10.7",
@@ -397,6 +658,12 @@ CONTROLES_PCI = [
         "dominio": "R10",
         "referencia": "PCI DSS v4.0 - Requisito 10.7",
         "iso_mapping": ["A.8.16", "A.5.24"],
+        "evidencia_requerida": [
+            "Proceso documentado de detección y respuesta a fallos de controles de seguridad",
+            "Alertas configuradas para fallos de controles críticos (antivirus caído, log pipeline roto, etc.)",
+            "Registros de fallos de controles detectados y respondidos en el período",
+            "Actas de revisión de disponibilidad de controles de seguridad críticos",
+        ],
     },
 
     # ── R11: Testear la seguridad de sistemas y redes regularmente ────────
@@ -407,6 +674,11 @@ CONTROLES_PCI = [
         "dominio": "R11",
         "referencia": "PCI DSS v4.0 - Requisito 11.1",
         "iso_mapping": ["A.5.1"],
+        "evidencia_requerida": [
+            "Política de pruebas de seguridad periódicas documentada",
+            "Plan de pruebas de seguridad anual aprobado",
+            "Inventario de sistemas del CDE sujetos a pruebas de seguridad",
+        ],
     },
     {
         "id": "PCI-11.2",
@@ -415,6 +687,12 @@ CONTROLES_PCI = [
         "dominio": "R11",
         "referencia": "PCI DSS v4.0 - Requisito 11.2",
         "iso_mapping": ["A.8.20"],
+        "evidencia_requerida": [
+            "Reportes de escaneos inalámbricos de los últimos 12 meses (mínimo 4 escaneos trimestrales)",
+            "Proceso de respuesta a access points no autorizados detectados",
+            "Herramienta utilizada para escaneo inalámbrico con configuración y alcance",
+            "Evidencia de seguimiento y cierre de hallazgos de escaneos anteriores",
+        ],
     },
     {
         "id": "PCI-11.3",
@@ -423,6 +701,12 @@ CONTROLES_PCI = [
         "dominio": "R11",
         "referencia": "PCI DSS v4.0 - Requisito 11.3",
         "iso_mapping": ["A.8.8"],
+        "evidencia_requerida": [
+            "Reportes de escaneo de vulnerabilidades externas de ASV aprobado (últimos 4 trimestres)",
+            "Reportes de escaneo de vulnerabilidades internas trimestrales",
+            "Evidencia de re-escaneo con resultado 'limpio' tras remediación de hallazgos críticos/altos",
+            "Plan de remediación de vulnerabilidades con fechas comprometidas",
+        ],
     },
     {
         "id": "PCI-11.4",
@@ -431,6 +715,13 @@ CONTROLES_PCI = [
         "dominio": "R11",
         "referencia": "PCI DSS v4.0 - Requisito 11.4",
         "iso_mapping": ["A.8.8", "A.5.36"],
+        "evidencia_requerida": [
+            "Reporte de prueba de penetración anual ejecutada por profesional calificado e independiente",
+            "Alcance del pentest documentado incluyendo perímetro externo y segmentación del CDE",
+            "Evidencia de remediación de hallazgos críticos y altos del pentest",
+            "Resultado de re-testing confirmando cierre de vulnerabilidades críticas",
+            "CV o certificaciones del ejecutor del pentest (OSCP, CEH, CREST, etc.)",
+        ],
     },
     {
         "id": "PCI-11.5",
@@ -439,6 +730,12 @@ CONTROLES_PCI = [
         "dominio": "R11",
         "referencia": "PCI DSS v4.0 - Requisito 11.5",
         "iso_mapping": ["A.8.16", "A.8.7"],
+        "evidencia_requerida": [
+            "Configuración del IDS/IPS protegiendo el CDE con reglas actualizadas",
+            "Configuración de FIM (File Integrity Monitoring) sobre archivos críticos del CDE",
+            "Alertas generadas por FIM/IDS en el período bajo evaluación",
+            "Proceso de respuesta ante alertas de cambios no autorizados documentado",
+        ],
     },
     {
         "id": "PCI-11.6",
@@ -447,6 +744,12 @@ CONTROLES_PCI = [
         "dominio": "R11",
         "referencia": "PCI DSS v4.0 - Requisito 11.6",
         "iso_mapping": ["A.8.16", "A.8.26"],
+        "evidencia_requerida": [
+            "Configuración de herramienta de detección de cambios en páginas de pago",
+            "Registros de revisiones semanales de integridad de páginas de pago",
+            "Alertas configuradas para inyección de scripts en páginas de pago",
+            "Política de Content Security Policy (CSP) implementada en páginas de pago",
+        ],
     },
 
     # ── R12: Mantener una política de seguridad de la información ─────────
@@ -457,6 +760,12 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.1",
         "iso_mapping": ["A.5.1"],
+        "evidencia_requerida": [
+            "Política de seguridad de la información aprobada y firmada por la alta dirección",
+            "Evidencia de revisión anual de la política (control de versiones con fecha)",
+            "Registros de comunicación y distribución de la política al personal",
+            "Acuse de recibo o confirmación de lectura del personal",
+        ],
     },
     {
         "id": "PCI-12.2",
@@ -465,6 +774,11 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.2",
         "iso_mapping": ["A.5.10", "A.6.2"],
+        "evidencia_requerida": [
+            "Política de uso aceptable de tecnología documentada",
+            "Registros de aceptación anual de la política por parte del personal con acceso al CDE",
+            "Evidencia de inclusión de política de uso aceptable en proceso de onboarding",
+        ],
     },
     {
         "id": "PCI-12.3",
@@ -473,6 +787,12 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.3",
         "iso_mapping": ["A.5.7", "A.5.8"],
+        "evidencia_requerida": [
+            "Reporte de evaluación de riesgos anual enfocada en el CDE",
+            "Metodología de gestión de riesgos documentada",
+            "Registro de tratamiento de riesgos identificados con responsables y fechas",
+            "Actas de revisión y aprobación de la evaluación de riesgos por la dirección",
+        ],
     },
     {
         "id": "PCI-12.4",
@@ -481,6 +801,12 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.4",
         "iso_mapping": ["A.5.35", "A.5.36"],
+        "evidencia_requerida": [
+            "Designación formal de responsable ejecutivo de cumplimiento PCI DSS",
+            "Actas de revisiones trimestrales de cumplimiento PCI DSS",
+            "Programa de gestión de cumplimiento PCI DSS documentado",
+            "Reporte de estado de cumplimiento más reciente",
+        ],
     },
     {
         "id": "PCI-12.5",
@@ -489,6 +815,12 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.5",
         "iso_mapping": ["A.5.9"],
+        "evidencia_requerida": [
+            "Documentación del alcance del CDE validada y firmada anualmente",
+            "Diagrama de red actualizado con todos los componentes del CDE identificados",
+            "Reporte de data flow de PAN mostrando todos los puntos de almacenamiento, procesamiento y transmisión",
+            "Evidencia de validación del alcance ante cambios significativos en el entorno",
+        ],
     },
     {
         "id": "PCI-12.6",
@@ -497,6 +829,12 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.6",
         "iso_mapping": ["A.6.3"],
+        "evidencia_requerida": [
+            "Programa de concientización en seguridad documentado con contenidos y frecuencia",
+            "Registros de capacitación inicial de nuevos empleados con acceso al CDE",
+            "Registros de capacitación anual del personal (listado de asistentes y fechas)",
+            "Contenido de la capacitación que incluya amenazas actuales y reporte de incidentes",
+        ],
     },
     {
         "id": "PCI-12.7",
@@ -505,6 +843,11 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.7",
         "iso_mapping": ["A.6.1"],
+        "evidencia_requerida": [
+            "Política de verificación de antecedentes para personal con acceso al CDE",
+            "Evidencia de verificación de antecedentes realizada (sin exponer datos personales)",
+            "Proceso documentado de screening previo al acceso al CDE",
+        ],
     },
     {
         "id": "PCI-12.8",
@@ -513,6 +856,13 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.8",
         "iso_mapping": ["A.5.19", "A.5.20", "A.5.21", "A.5.22"],
+        "evidencia_requerida": [
+            "Inventario actualizado de TPSPs con acceso al CDE o que impactan la seguridad de datos de titulares",
+            "Contratos o acuerdos de servicio con cláusulas de cumplimiento PCI DSS",
+            "Certificados de cumplimiento PCI DSS vigentes de los TPSPs (AOC, SAQ)",
+            "Proceso de monitoreo periódico del estado de cumplimiento de TPSPs documentado",
+            "Registros de revisiones anuales de cumplimiento de TPSPs",
+        ],
     },
     {
         "id": "PCI-12.9",
@@ -521,6 +871,11 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.9",
         "iso_mapping": ["A.5.20"],
+        "evidencia_requerida": [
+            "Acuerdos firmados por TPSPs reconociendo su responsabilidad de cumplimiento PCI DSS",
+            "Matriz de responsabilidades compartidas (shared responsibility matrix) con cada TPSP",
+            "Evidencia de comunicación de requisitos PCI DSS a los TPSPs",
+        ],
     },
     {
         "id": "PCI-12.10",
@@ -529,5 +884,12 @@ CONTROLES_PCI = [
         "dominio": "R12",
         "referencia": "PCI DSS v4.0 - Requisito 12.10",
         "iso_mapping": ["A.5.24", "A.5.25", "A.5.26", "A.5.27"],
+        "evidencia_requerida": [
+            "Plan de respuesta a incidentes de seguridad documentado y aprobado",
+            "Evidencia de prueba o simulacro del plan de respuesta a incidentes (tabletop exercise)",
+            "Registros de incidentes de seguridad gestionados en el período con cierre documentado",
+            "Listado de contactos de notificación de marcas de pago ante compromiso de datos",
+            "Revisión anual del plan de respuesta a incidentes con registro de cambios",
+        ],
     },
 ]

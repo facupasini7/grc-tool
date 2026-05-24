@@ -218,9 +218,61 @@ function toggleDominioCob(domId) {
   arrow.textContent = open ? "▸" : "▾";
 }
 
+// Cerrar cualquier dropdown abierto (excepto el que se está abriendo)
+function cerrarDropdowns(exceptId) {
+  document.querySelectorAll(".ev-req-dropdown:not(.hidden)").forEach(d => {
+    if (d.id !== `evreq-${exceptId}`) {
+      d.classList.add("hidden");
+      const btn = document.querySelector(`[data-ev-btn="${d.id.replace('evreq-','')}"]`);
+      if (btn) btn.textContent = "📋 Ver";
+    }
+  });
+}
+
 function toggleEvReq(ctrlId, btn) {
   const panel = document.getElementById(`evreq-${ctrlId}`);
   if (!panel) return;
-  const isHidden = panel.classList.toggle("hidden");
-  btn.textContent = isHidden ? "📋 Ver" : "📋 Ocultar";
+
+  const estaAbierto = !panel.classList.contains("hidden");
+  cerrarDropdowns(ctrlId);
+
+  if (estaAbierto) {
+    panel.classList.add("hidden");
+    btn.textContent = "📋 Ver";
+    return;
+  }
+
+  // Posicionar con position:fixed — inmune a overflow:hidden de ancestros
+  const rect = btn.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  panel.classList.remove("hidden");          // mostrar para medir
+  const pw = panel.offsetWidth;
+  const ph = panel.offsetHeight;
+
+  // Horizontal: alinear a la derecha del botón; si se sale, alinear a la izquierda
+  let left = rect.right - pw;
+  if (left < 8) left = rect.left;
+  if (left + pw > vw - 8) left = vw - pw - 8;
+
+  // Vertical: por defecto debajo del botón; si no cabe, encima
+  let top = rect.bottom + 6;
+  if (top + ph > vh - 8) top = rect.top - ph - 6;
+
+  panel.style.left = `${left}px`;
+  panel.style.top  = `${top}px`;
+  btn.textContent = "📋 Ocultar";
+  btn.dataset.evBtn = ctrlId;
 }
+
+// Cerrar dropdowns al hacer scroll o click fuera
+document.addEventListener("scroll", () => cerrarDropdowns(null), true);
+document.addEventListener("click", e => {
+  if (!e.target.closest(".btn-ev-req") && !e.target.closest(".ev-req-dropdown")) {
+    cerrarDropdowns(null);
+    document.querySelectorAll(".btn-ev-req").forEach(b => {
+      if (b.textContent.includes("Ocultar")) b.textContent = "📋 Ver";
+    });
+  }
+});
