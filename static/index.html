@@ -19,6 +19,7 @@
     <a href="#" class="nav-item" data-view="evaluacion"><span class="nav-icon">📋</span> Evaluación</a>
     <a href="#" class="nav-item" data-view="stats"><span class="nav-icon">📊</span> Resultados</a>
     <a href="#" class="nav-item" data-view="hallazgos"><span class="nav-icon">⚠️</span> Hallazgos</a>
+    <a href="#" class="nav-item" data-view="cobertura"><span class="nav-icon">🗺️</span> Cobertura</a>
   </nav>
   <div class="sidebar-footer">
     <small>ISO/IEC 27001:2022<br>93 controles · 4 dominios</small>
@@ -71,6 +72,7 @@
         <div class="progress-badge"><span id="progreso-pct">0%</span><span class="progress-label">completado</span></div>
         <button class="btn btn-success" id="btn-ver-stats">Ver resultados</button>
         <button class="btn btn-warning" id="btn-ver-hallazgos">⚠️ Hallazgos</button>
+        <button class="btn btn-info" id="btn-ver-cobertura">🗺️ Cobertura</button>
         <button class="btn btn-outline" id="btn-pdf">📄 PDF</button>
       </div>
     </div>
@@ -136,6 +138,42 @@
     </div>
 
     <div id="lista-hallazgos"></div>
+  </div>
+
+  <!-- ── Cobertura Multi-framework ─────────────────────────────────────── -->
+  <div id="view-cobertura" class="view">
+    <div class="page-header row-between">
+      <div>
+        <h1>Cobertura Multi-framework</h1>
+        <p class="subtitle" id="cobertura-empresa">Seleccioná una evaluación para ver la cobertura estimada.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="btn-back-eval-cob">← Evaluación</button>
+      </div>
+    </div>
+
+    <div id="cobertura-sin-eval" class="empty-state">
+      <div class="empty-icon">🗺️</div>
+      <div>Abrí una evaluación ISO 27001 primero para ver cómo se mapea a otros frameworks.</div>
+    </div>
+
+    <div id="cobertura-contenido" class="hidden">
+      <!-- Selector de framework -->
+      <div class="fw-selector">
+        <button class="btn btn-fw active" data-fw="BCRA" onclick="seleccionarFramework('BCRA')">
+          🏦 BCRA A 7777/7783
+        </button>
+        <button class="btn btn-fw" data-fw="PCI" onclick="seleccionarFramework('PCI')">
+          💳 PCI DSS v4.0
+        </button>
+      </div>
+
+      <!-- Resumen de cobertura -->
+      <div class="cobertura-resumen" id="cobertura-resumen"></div>
+
+      <!-- Tabla de controles por dominio -->
+      <div id="cobertura-dominios"></div>
+    </div>
   </div>
 
 </main>
@@ -225,5 +263,6 @@
 <script src="/static/js/app.js"></script>
 <script src="/static/js/hallazgos.js"></script>
 <script src="/static/js/evidencias.js"></script>
+<script src="/static/js/cobertura.js"></script>
 </body>
 </html>

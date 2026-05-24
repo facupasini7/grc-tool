@@ -1,0 +1,173 @@
+/* ── Módulo de Cobertura Multi-framework ────────────────────────────── */
+
+let coberturaActual = null;
+let fwActual = "BCRA";
+
+const FW_INFO = {
+  BCRA: { nombre: "BCRA A 7777/7783", icono: "🏦", color: "#3b82f6" },
+  PCI:  { nombre: "PCI DSS v4.0",     icono: "💳", color: "#8b5cf6" },
+};
+
+// ── Botón desde evaluación ──────────────────────────────────────────────
+document.getElementById("btn-ver-cobertura").addEventListener("click", () => {
+  if (!evalActual) return;
+  document.getElementById("cobertura-empresa").textContent = evalActual.empresa;
+  document.getElementById("cobertura-sin-eval").classList.add("hidden");
+  document.getElementById("cobertura-contenido").classList.remove("hidden");
+  showView("cobertura");
+  cargarCobertura(fwActual);
+});
+
+document.getElementById("btn-back-eval-cob").addEventListener("click", () => showView("evaluacion"));
+
+// ── Activar desde nav sin evaluación ──────────────────────────────────
+document.querySelector('[data-view="cobertura"]').addEventListener("click", () => {
+  if (!evalActual) {
+    document.getElementById("cobertura-sin-eval").classList.remove("hidden");
+    document.getElementById("cobertura-contenido").classList.add("hidden");
+  }
+});
+
+// ── Cargar datos de cobertura ──────────────────────────────────────────
+async function cargarCobertura(fw) {
+  if (!evalActual) return;
+  fwActual = fw;
+
+  const data = await fetch(`${API}/api/evaluaciones/${evalActual.id}/cobertura/${fw.toLowerCase()}`)
+    .then(r => r.json())
+    .catch(() => null);
+
+  if (!data) return;
+  coberturaActual = data;
+  renderCobertura(data);
+}
+
+function seleccionarFramework(fw) {
+  document.querySelectorAll(".btn-fw").forEach(b => b.classList.toggle("active", b.dataset.fw === fw));
+  cargarCobertura(fw);
+}
+
+// ── Render principal ────────────────────────────────────────────────────
+function renderCobertura(data) {
+  renderResumen(data);
+  renderDominios(data);
+}
+
+function madurezColor(m) {
+  if (m >= 4) return "#22c55e";
+  if (m >= 3) return "#84cc16";
+  if (m >= 2) return "#f59e0b";
+  if (m >  0) return "#ef4444";
+  return "#94a3b8";
+}
+
+function madurezBarra(m, max = 5) {
+  const pct = Math.round((m / max) * 100);
+  const color = madurezColor(m);
+  return `<div class="cob-bar-wrap">
+    <div class="cob-bar" style="width:${pct}%;background:${color}"></div>
+    <span class="cob-bar-val">${m > 0 ? m.toFixed(1) : "—"}</span>
+  </div>`;
+}
+
+function renderResumen(data) {
+  const doms = Object.values(data.dominios);
+  const totalCtrl = data.controles.length;
+  const conCobertura = data.controles.filter(c => c.madurez_estimada > 0).length;
+  const pctCobertura = totalCtrl ? Math.round((conCobertura / totalCtrl) * 100) : 0;
+
+  const madAll = data.controles.filter(c => c.madurez_estimada > 0).map(c => c.madurez_estimada);
+  const madGlobal = madAll.length ? (madAll.reduce((a, b) => a + b, 0) / madAll.length).toFixed(2) : "—";
+
+  const criticos = data.controles.filter(c => c.madurez_estimada > 0 && c.madurez_estimada < 2).length;
+  const fw = FW_INFO[data.framework] || { nombre: data.framework, icono: "📋" };
+
+  document.getElementById("cobertura-resumen").innerHTML = `
+    <div class="cob-resumen-header">
+      <span class="fw-badge">${fw.icono} ${fw.nombre}</span>
+      <span class="cob-subtitle">Cobertura estimada basada en madurez ISO 27001:2022</span>
+    </div>
+    <div class="cob-stats-row">
+      <div class="cob-stat">
+        <div class="cob-stat-val">${pctCobertura}%</div>
+        <div class="cob-stat-lbl">Controles con cobertura</div>
+      </div>
+      <div class="cob-stat">
+        <div class="cob-stat-val">${madGlobal}</div>
+        <div class="cob-stat-lbl">Madurez promedio /5</div>
+      </div>
+      <div class="cob-stat">
+        <div class="cob-stat-val">${conCobertura}/${totalCtrl}</div>
+        <div class="cob-stat-lbl">Controles evaluados</div>
+      </div>
+      <div class="cob-stat cob-stat-warn">
+        <div class="cob-stat-val">${criticos}</div>
+        <div class="cob-stat-lbl">Brechas críticas (&lt;2)</div>
+      </div>
+    </div>`;
+}
+
+function renderDominios(data) {
+  const cont = document.getElementById("cobertura-dominios");
+
+  // Agrupar controles por dominio
+  const porDominio = {};
+  data.controles.forEach(c => {
+    if (!porDominio[c.dominio]) porDominio[c.dominio] = [];
+    porDominio[c.dominio].push(c);
+  });
+
+  cont.innerHTML = Object.entries(data.dominios).map(([domId, dom]) => {
+    const ctrls = porDominio[domId] || [];
+    const madProm = dom.madurez_promedio;
+
+    return `
+    <div class="cob-dominio">
+      <div class="cob-dominio-header" onclick="toggleDominioCob('${domId}')">
+        <div class="cob-dominio-info">
+          <span class="cob-dominio-id">${domId}</span>
+          <span class="cob-dominio-nombre">${dom.nombre}</span>
+          <span class="cob-dominio-sub">${dom.con_cobertura}/${dom.total} controles cubiertos</span>
+        </div>
+        <div class="cob-dominio-right">
+          ${madurezBarra(madProm)}
+          <span class="cob-toggle" id="cob-arrow-${domId}">▸</span>
+        </div>
+      </div>
+      <div id="cob-body-${domId}" class="cob-dominio-body hidden">
+        <table class="cob-tabla">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Control</th>
+              <th>Referencia</th>
+              <th>Madurez estimada</th>
+              <th>Controles ISO cubiertos</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ctrls.map(c => `
+            <tr class="${c.madurez_estimada === 0 ? 'cob-row-gap' : c.madurez_estimada < 2 ? 'cob-row-critica' : c.madurez_estimada < 3 ? 'cob-row-baja' : ''}">
+              <td><span class="cob-ctrl-id">${c.id}</span></td>
+              <td class="cob-ctrl-nombre">${c.nombre}</td>
+              <td class="cob-referencia">${c.referencia}</td>
+              <td>${madurezBarra(c.madurez_estimada)}</td>
+              <td>
+                <span class="cob-iso-count">${c.controles_iso_cubiertos}/${c.controles_iso_total}</span>
+                <div class="cob-iso-tags">${c.iso_mapping.slice(0, 4).map(iso => `<span class="iso-tag">${iso}</span>`).join("")}${c.iso_mapping.length > 4 ? `<span class="iso-tag">+${c.iso_mapping.length - 4}</span>` : ""}</div>
+              </td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function toggleDominioCob(domId) {
+  const body  = document.getElementById(`cob-body-${domId}`);
+  const arrow = document.getElementById(`cob-arrow-${domId}`);
+  if (!body) return;
+  const open = body.classList.toggle("hidden");
+  arrow.textContent = open ? "▸" : "▾";
+}

@@ -11,6 +11,8 @@ from pathlib import Path
 
 from database import get_conn, init_db
 from data.controles_iso27001 import CONTROLES, DOMINIOS
+from data.controles_bcra import CONTROLES_BCRA, DOMINIOS_BCRA
+from data.controles_pci import CONTROLES_PCI, DOMINIOS_PCI
 from report import generar_pdf
 from ai_analyzer import analizar_evidencia
 
@@ -78,6 +80,66 @@ def calcular_stats(evaluacion_id):
     stats["madurez_global"] = round(sum(todas_madureces) / len(todas_madureces), 2) if todas_madureces else 0
     stats["progreso_pct"] = round(stats["respondidos"] / stats["total"] * 100, 1) if stats["total"] else 0
     return stats
+
+
+def calcular_cobertura(evaluacion_id: int, framework: str):
+    """Calcula cobertura estimada de BCRA o PCI DSS basada en madurez ISO 27001."""
+    controles_fw = CONTROLES_BCRA if framework == "BCRA" else CONTROLES_PCI
+    dominios_fw  = DOMINIOS_BCRA  if framework == "BCRA" else DOMINIOS_PCI
+
+    with get_conn() as conn:
+        filas = conn.execute(
+            "SELECT control_id, madurez, aplica FROM respuestas WHERE evaluacion_id = ?",
+            (evaluacion_id,),
+        ).fetchall()
+    madureces_iso = {r["control_id"]: dict(r) for r in filas}
+
+    dominios_result = {}
+    controles_result = []
+
+    for ctrl in controles_fw:
+        mapped = ctrl.get("iso_mapping", [])
+        scores = [
+            madureces_iso[iso]["madurez"]
+            for iso in mapped
+            if iso in madureces_iso and madureces_iso[iso].get("aplica", 1) and madureces_iso[iso]["madurez"] > 0
+        ]
+        madurez_est = round(sum(scores) / len(scores), 2) if scores else 0
+        cubierto = len(scores)
+        total_mapped = len(mapped)
+
+        controles_result.append({
+            "id": ctrl["id"],
+            "nombre": ctrl["nombre"],
+            "dominio": ctrl["dominio"],
+            "referencia": ctrl.get("referencia", ""),
+            "iso_mapping": mapped,
+            "madurez_estimada": madurez_est,
+            "controles_iso_cubiertos": cubierto,
+            "controles_iso_total": total_mapped,
+        })
+
+        dom = ctrl["dominio"]
+        if dom not in dominios_result:
+            dominios_result[dom] = {
+                "nombre": dominios_fw[dom],
+                "total": 0,
+                "con_cobertura": 0,
+                "madurez_sum": 0.0,
+            }
+        dominios_result[dom]["total"] += 1
+        if madurez_est > 0:
+            dominios_result[dom]["con_cobertura"] += 1
+            dominios_result[dom]["madurez_sum"] += madurez_est
+
+    for dom in dominios_result:
+        n = dominios_result[dom]["con_cobertura"]
+        dominios_result[dom]["madurez_promedio"] = (
+            round(dominios_result[dom]["madurez_sum"] / n, 2) if n else 0
+        )
+        del dominios_result[dom]["madurez_sum"]
+
+    return {"framework": framework, "dominios": dominios_result, "controles": controles_result}
 
 
 # ── Handler HTTP ──────────────────────────────────────────────────────────────
@@ -174,6 +236,27 @@ class Handler(BaseHTTPRequestHandler):
 
         elif path == "/api/dominios":
             self.send_json(DOMINIOS)
+
+        elif path == "/api/frameworks/bcra/controles":
+            self.send_json(CONTROLES_BCRA)
+
+        elif path == "/api/frameworks/bcra/dominios":
+            self.send_json(DOMINIOS_BCRA)
+
+        elif path == "/api/frameworks/pci/controles":
+            self.send_json(CONTROLES_PCI)
+
+        elif path == "/api/frameworks/pci/dominios":
+            self.send_json(DOMINIOS_PCI)
+
+        elif path.startswith("/api/evaluaciones/") and "/cobertura/" in path:
+            parts = path.split("/")
+            eid = int(parts[3])
+            fw = parts[5].upper()
+            if fw not in ("BCRA", "PCI"):
+                self.send_json({"error": "framework no soportado"}, 400)
+                return
+            self.send_json(calcular_cobertura(eid, fw))
 
         elif path.startswith("/api/report/"):
             eid = int(path.split("/")[3])
