@@ -228,9 +228,23 @@ class Handler(BaseHTTPRequestHandler):
 
     def _require_admin(self, user):
         if user.get("rol") != "admin":
-            self.send_json({"error": "Se requiere rol administrador"}, 403)
+            self.send_json({"error": "Se requiere rol Administrador."}, 403)
             return False
         return True
+
+    def _require_write(self, user):
+        """admin y analista pueden escribir; auditor_externo solo lectura."""
+        if user.get("rol") in ("admin", "analista", "auditor"):
+            return True
+        self.send_json({"error": "Tu rol es de solo lectura. No podés realizar esta operación."}, 403)
+        return False
+
+    def _require_audit_access(self, user):
+        """Audit log: visible para admin y auditor_externo."""
+        if user.get("rol") in ("admin", "auditor_externo"):
+            return True
+        self.send_json({"error": "Sin acceso al log de auditoría."}, 403)
+        return False
 
     def _ip(self):
         return self.client_address[0]
@@ -306,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
             })
 
         elif path == "/api/audit-log":
-            if not self._require_admin(user):
+            if not self._require_audit_access(user):
                 return
             limit  = int(qs.get("limit",  ["200"])[0])
             offset = int(qs.get("offset", ["0"])[0])
@@ -460,20 +474,25 @@ class Handler(BaseHTTPRequestHandler):
             if not username or not password:
                 self.send_json({"error": "username y password son requeridos"}, 400)
                 return
+            rol_nuevo = body.get("rol", "analista")
+            if rol_nuevo not in ("admin", "analista", "auditor_externo"):
+                rol_nuevo = "analista"
             try:
                 with get_conn() as conn:
                     cur = conn.execute(
                         "INSERT INTO usuarios (username, password_hash, nombre, rol) VALUES (?,?,?,?)",
-                        (username, hash_password(password), body.get("nombre", ""), body.get("rol", "auditor")),
+                        (username, hash_password(password), body.get("nombre", ""), rol_nuevo),
                     )
                 log_action(user["id"], user["username"], "crear_usuario",
-                           "usuario", cur.lastrowid, f"username={username}", self._ip())
+                           "usuario", cur.lastrowid, f"username={username} rol={rol_nuevo}", self._ip())
                 self.send_json({"id": cur.lastrowid})
             except Exception as e:
                 self.send_json({"error": f"No se pudo crear: {e}"}, 400)
 
         # ── Crear evaluación ──
         elif path == "/api/evaluaciones":
+            if not self._require_write(user):
+                return
             fws = body.get("frameworks", ["ISO27001"])
             if not fws:
                 fws = ["ISO27001"]
@@ -490,6 +509,8 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Guardar respuesta de control ──
         elif path.startswith("/api/evaluaciones/") and "/respuestas" in path:
+            if not self._require_write(user):
+                return
             eid      = int(path.split("/")[3])
             ctrl_id  = body["control_id"]
             madurez  = int(body.get("madurez", 0))
@@ -510,6 +531,8 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Subir evidencia (base64) ──
         elif path.startswith("/api/evaluaciones/") and "/evidencias" in path and "analizar" not in path:
+            if not self._require_write(user):
+                return
             eid      = int(path.split("/")[3])
             ctrl_id  = body.get("control_id", "")
             filename = body.get("filename", "archivo")
@@ -542,6 +565,8 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Analizar evidencia con IA ──
         elif "/evidencias/" in path and path.endswith("/analizar"):
+            if not self._require_write(user):
+                return
             parts = path.split("/")
             ev_id = int(parts[5])
             with get_conn() as conn:
@@ -572,6 +597,8 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Crear hallazgo ──
         elif path.startswith("/api/evaluaciones/") and "/hallazgos" in path:
+            if not self._require_write(user):
+                return
             eid = int(path.split("/")[3])
             with get_conn() as conn:
                 cur = conn.execute(
@@ -610,6 +637,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if "/hallazgos/" in path:
+            if not self._require_write(user):
+                return
             hid    = int(path.split("/")[-1])
             campos = ["tipo", "severidad", "titulo", "descripcion",
                       "responsable_nombre", "responsable_email",
@@ -628,11 +657,30 @@ class Handler(BaseHTTPRequestHandler):
                                "hallazgo", hid, f"nuevo estado: {body['estado']}", self._ip())
             self.send_json({"ok": True})
 
+        elif "/usuarios/" in path and path.endswith("/password"):
+            # Cambiar contraseña: admin puede cambiar cualquiera, el usuario puede cambiar la suya
+            uid = int(path.split("/")[3])
+            if user["id"] != uid and not self._require_admin(user):
+                return
+            from auth import hash_password
+            new_pw = body.get("password", "")
+            if len(new_pw) < 8:
+                self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+                return
+            with get_conn() as conn:
+                conn.execute("UPDATE usuarios SET password_hash=? WHERE id=?",
+                             (hash_password(new_pw), uid))
+            self.send_json({"ok": True})
+
         elif "/usuarios/" in path:
             uid = int(path.split("/")[-1])
             if not self._require_admin(user):
                 return
             campos = ["nombre", "rol", "activo"]
+            # Validar rol si viene en el body
+            if "rol" in body and body["rol"] not in ("admin", "analista", "auditor_externo"):
+                self.send_json({"error": "Rol inválido."}, 400)
+                return
             sets   = ", ".join(f"{c}=?" for c in campos if c in body)
             vals   = [body[c] for c in campos if c in body]
             if sets:
@@ -657,6 +705,8 @@ class Handler(BaseHTTPRequestHandler):
         from auth import log_action
 
         if "/hallazgos/" in path:
+            if not self._require_admin(user):
+                return
             hid = int(path.split("/")[-1])
             with get_conn() as conn:
                 conn.execute("DELETE FROM hallazgos WHERE id=?", (hid,))
@@ -665,6 +715,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True})
 
         elif "/evidencias/" in path:
+            if not self._require_admin(user):
+                return
             ev_id = int(path.split("/")[-1])
             with get_conn() as conn:
                 ev = conn.execute("SELECT filepath FROM evidencias WHERE id=?", (ev_id,)).fetchone()
@@ -677,6 +729,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True})
 
         elif path.startswith("/api/evaluaciones/"):
+            if not self._require_admin(user):
+                return
             eid = int(path.split("/")[3])
             with get_conn() as conn:
                 ev = conn.execute("SELECT nombre FROM evaluaciones WHERE id=?", (eid,)).fetchone()
@@ -684,6 +738,17 @@ class Handler(BaseHTTPRequestHandler):
                 conn.execute("DELETE FROM evaluaciones WHERE id=?", (eid,))
             log_action(user["id"], user["username"], "eliminar_evaluacion",
                        "evaluacion", eid, nombre, self._ip())
+            self.send_json({"ok": True})
+
+        elif "/usuarios/" in path:
+            uid = int(path.split("/")[-1])
+            if not self._require_admin(user):
+                return
+            if uid == user["id"]:
+                self.send_json({"error": "No podés eliminar tu propia cuenta."}, 400)
+                return
+            with get_conn() as conn:
+                conn.execute("DELETE FROM usuarios WHERE id=?", (uid,))
             self.send_json({"ok": True})
 
         else:

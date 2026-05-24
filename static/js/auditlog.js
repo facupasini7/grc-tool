@@ -42,7 +42,7 @@ async function cargarAuditLog() {
     document.getElementById("audit-counter").textContent = `${_auditRows.length} registros`;
   } catch (err) {
     if (err.message === "forbidden") {
-      cont.innerHTML = `<div class="empty-state">⛔ Solo los administradores pueden ver el log de auditoría.</div>`;
+      cont.innerHTML = `<div class="empty-state">⛔ Tu rol no tiene acceso al log de auditoría.</div>`;
     } else {
       cont.innerHTML = `<div class="empty-state">Error al cargar el log.</div>`;
     }

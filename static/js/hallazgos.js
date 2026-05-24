@@ -54,8 +54,8 @@ async function cargarHallazgos(eid) {
         </div>
         <div class="hallazgo-actions">
           <span class="estado-tag ${ESTADO_CLASS[h.estado]}">${ESTADO_LABELS[h.estado]}</span>
-          <button class="btn-icon" onclick="editarHallazgo(${h.id})" title="Editar">✏️</button>
-          <button class="btn-icon danger" onclick="eliminarHallazgo(${h.id})" title="Eliminar">🗑</button>
+          ${puedeEscribir() ? `<button class="btn-icon" onclick="editarHallazgo(${h.id})" title="Editar">✏️</button>` : ""}
+          ${esAdmin() ? `<button class="btn-icon danger" onclick="eliminarHallazgo(${h.id})" title="Eliminar">🗑</button>` : ""}
         </div>
       </div>
       <div class="hallazgo-titulo">${h.titulo}</div>
@@ -70,12 +70,13 @@ async function cargarHallazgos(eid) {
           <span class="plan-label">Plan de acción</span>
           <div class="plan-text">${h.plan_accion}</div>
         </div>` : ""}
+      ${puedeEscribir() ? `
       <div class="estado-row">
         ${Object.entries(ESTADO_LABELS).map(([val, lbl]) => `
           <button class="btn-estado ${h.estado === val ? "active-estado" : ""}"
             onclick="cambiarEstado(${h.id}, '${val}')">${lbl}</button>
         `).join("")}
-      </div>
+      </div>` : ""}
     </div>
   `).join("");
 }

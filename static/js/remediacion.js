@@ -102,7 +102,8 @@ function renderKanbanCard(h, estadoCol) {
   const hoy     = new Date().toISOString().slice(0, 10);
   const vencida = h.fecha_limite && h.fecha_limite < hoy && estadoCol !== "cerrado";
 
-  const accionBtn = estadoCol === "abierto"
+  const accionBtn = !puedeEscribir() ? "" :
+    estadoCol === "abierto"
     ? `<button class="btn-kanban btn-kanban-avanzar" onclick="avanzarEstado(${h.id}, 'en_proceso')">→ En proceso</button>`
     : estadoCol === "en_proceso"
     ? `<button class="btn-kanban btn-kanban-avanzar" onclick="avanzarEstado(${h.id}, 'cerrado')">✓ Cerrar</button>`

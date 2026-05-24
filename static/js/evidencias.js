@@ -34,10 +34,12 @@ async function cargarEvidenciasControl(ctrlId) {
         <span class="ev-filename">📎 ${ev.filename}</span>
         <span class="ev-veredicto ${cfg.cls}">${cfg.icon} ${cfg.label}</span>
         <div class="ev-btns">
-          ${ev.veredicto === "pendiente" || !ev.analisis_ia
-            ? `<button class="btn btn-sm btn-ai" onclick="analizarEvidencia(${ev.id}, '${ctrlId}')">🤖 Analizar</button>`
-            : `<button class="btn btn-sm btn-outline" onclick="analizarEvidencia(${ev.id}, '${ctrlId}')">🔄 Re-analizar</button>`}
-          <button class="btn btn-sm btn-danger" onclick="eliminarEvidencia(${ev.id}, '${ctrlId}')">🗑</button>
+          ${puedeEscribir()
+            ? (ev.veredicto === "pendiente" || !ev.analisis_ia
+                ? `<button class="btn btn-sm btn-ai" onclick="analizarEvidencia(${ev.id}, '${ctrlId}')">🤖 Analizar</button>`
+                : `<button class="btn btn-sm btn-outline" onclick="analizarEvidencia(${ev.id}, '${ctrlId}')">🔄 Re-analizar</button>`)
+            : ""}
+          ${esAdmin() ? `<button class="btn btn-sm btn-danger" onclick="eliminarEvidencia(${ev.id}, '${ctrlId}')">🗑</button>` : ""}
         </div>
       </div>
       ${analisis ? renderAnalisis(ev.id, analisis, ctrlId) : ""}
@@ -70,9 +72,9 @@ function renderAnalisis(evId, analisis, ctrlId) {
       <div class="hallazgo-sugerido">
         <span class="hs-label">⚠️ Hallazgo sugerido por IA</span>
         <div class="hs-titulo">${sug.titulo || ""}</div>
-        <button class="btn btn-warning btn-sm" onclick='crearHallazgoDesdeIA("${ctrlId}", ${evId}, ${JSON.stringify(sug).replace(/'/g, "&#39;")})'>
+        ${puedeEscribir() ? `<button class="btn btn-warning btn-sm" onclick='crearHallazgoDesdeIA("${ctrlId}", ${evId}, ${JSON.stringify(sug).replace(/'/g, "&#39;")})'>
           + Crear hallazgo
-        </button>
+        </button>` : ""}
       </div>` : ""}
   </div>`;
 }
@@ -167,14 +169,15 @@ window.renderControles = function renderControles(dominioId) {
         📎 Evidencia <span class="ev-toggle-arrow" id="ev-arrow-${safeId}">▸</span>
       </div>
       <div id="ev-body-${safeId}" class="ev-body hidden">
+        ${puedeEscribir() ? `
         <div class="upload-zone" id="upload-zone-${safeId}">
           <span class="upload-hint">📎 Arrastrá archivos aquí o hacé clic · PDF, DOCX, TXT, PNG, JPG</span>
           <input type="file" id="upload-input-${safeId}" class="upload-input" accept=".pdf,.docx,.doc,.txt,.md,.csv,.json,.xml,.png,.jpg,.jpeg,.webp,.gif,.bmp" />
-        </div>
+        </div>` : ""}
         <div id="ev-panel-${safeId}" class="ev-panel"></div>
       </div>`;
     card.appendChild(evDiv);
-    setupUploadZone(c.id);
+    if (puedeEscribir()) setupUploadZone(c.id);
   });
 }
 

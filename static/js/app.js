@@ -16,6 +16,30 @@ let usuarioActual = null;
 
 const MADUREZ_LABELS = ["Inexistente","Inicial","Repetible","Definido","Gestionado","Optimizado"];
 
+// ── Helpers de rol ────────────────────────────────────────────────
+const ROL_LABELS = {
+  admin:          "Administrador",
+  analista:       "Analista",
+  auditor:        "Analista",        // alias legacy
+  auditor_externo:"Auditor Externo",
+};
+const ROL_CSS = {
+  admin:          "role-admin",
+  analista:       "role-analista",
+  auditor:        "role-analista",
+  auditor_externo:"role-externo",
+};
+
+function puedeEscribir() {
+  return ["admin", "analista", "auditor"].includes(usuarioActual?.rol);
+}
+function esAdmin() {
+  return usuarioActual?.rol === "admin";
+}
+function esAuditorExterno() {
+  return usuarioActual?.rol === "auditor_externo";
+}
+
 // ── Navegación ────────────────────────────────────────────────────
 document.querySelectorAll(".nav-item").forEach(a => {
   a.addEventListener("click", e => {
@@ -45,13 +69,23 @@ async function init() {
   const el = document.getElementById("sidebar-username");
   const rl = document.getElementById("sidebar-role");
   if (el) el.textContent = usuarioActual.nombre || usuarioActual.username;
-  if (rl) rl.textContent = usuarioActual.rol;
-
-  // Ocultar "Auditoría" para roles no admin
-  if (usuarioActual.rol !== "admin") {
-    const navAudit = document.querySelector('[data-view="auditoria"]');
-    if (navAudit) navAudit.style.display = "none";
+  if (rl) {
+    rl.textContent  = ROL_LABELS[usuarioActual.rol] || usuarioActual.rol;
+    rl.className    = `user-display-role ${ROL_CSS[usuarioActual.rol] || "role-default"}`;
   }
+
+  // ── Navegación por rol ──
+  // Auditoría: admin + auditor_externo
+  const navAudit = document.getElementById("nav-auditoria");
+  if (navAudit && !esAdmin() && !esAuditorExterno()) navAudit.style.display = "none";
+  // Usuarios: solo admin
+  const navUsuarios = document.getElementById("nav-usuarios");
+  if (navUsuarios && esAdmin()) navUsuarios.classList.remove("hidden");
+
+  // ── Acciones restringidas por rol ──
+  // "Nueva evaluación" solo para quien puede escribir
+  const btnNueva = document.getElementById("btn-nueva");
+  if (btnNueva && !puedeEscribir()) btnNueva.style.display = "none";
 
   // Cargar controles ISO 27001 base
   [_iso27001Controles, _iso27001Dominios] = await Promise.all([
@@ -104,7 +138,7 @@ async function cargarEvaluaciones() {
       <div class="eval-actions">
         <button class="btn btn-primary btn-sm" onclick="abrirEval(${e.id}, event)">Continuar</button>
         <button class="btn btn-outline btn-sm" onclick="verStats(${e.id}, event)">Resultados</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarEval(${e.id}, event)">🗑</button>
+        ${esAdmin() ? `<button class="btn btn-danger btn-sm" onclick="eliminarEval(${e.id}, event)">🗑</button>` : ""}
       </div>
     </div>`;
   }).join("")}</div>`;
@@ -241,6 +275,8 @@ function renderControles(dominioId) {
     const aplica = resp?.aplica ?? 1;
     const cardClass = !aplica ? "" : madurez === 0 ? "" : madurez < 3 ? "gap" : "ok";
 
+    const soloLectura = !puedeEscribir();
+
     return `
     <div class="control-card ${madurez > 0 ? (madurez < 3 ? "gap" : "ok") : ""}" id="card-${c.id}">
       <div class="control-header">
@@ -252,54 +288,57 @@ function renderControles(dominioId) {
       </div>
       <div class="control-body">
         <label class="aplica-toggle">
-          <input type="checkbox" ${aplica ? "checked" : ""} data-ctrl="${c.id}" class="chk-aplica" />
+          <input type="checkbox" ${aplica ? "checked" : ""} data-ctrl="${c.id}" class="chk-aplica" ${soloLectura ? "disabled" : ""} />
           Aplica
         </label>
         <div class="madurez-selector" id="sel-${c.id}">
           ${[0,1,2,3,4,5].map(n => `
             <button class="nivel-btn ${madurez === n ? `sel-${n}` : ""}"
-              data-ctrl="${c.id}" data-n="${n}" title="${MADUREZ_LABELS[n]}">${n}</button>
+              data-ctrl="${c.id}" data-n="${n}" title="${MADUREZ_LABELS[n]}"
+              ${soloLectura ? "disabled style=\"cursor:default;opacity:.7\"" : ""}>${n}</button>
           `).join("")}
         </div>
         <span class="nivel-label" id="lbl-${c.id}">${MADUREZ_LABELS[madurez]}</span>
-        <button class="btn-comment" data-ctrl="${c.id}">💬 Comentario</button>
+        ${!soloLectura ? `<button class="btn-comment" data-ctrl="${c.id}">💬 Comentario</button>` : ""}
       </div>
-      <textarea class="control-comment ${comentario ? "visible" : ""}"
-        id="cmt-${c.id}" placeholder="Agregar comentario o evidencia...">${comentario}</textarea>
+      ${comentario ? `<div class="control-comment visible" id="cmt-${c.id}" style="padding:8px 12px;font-style:italic;font-size:12px;color:var(--text-muted)">${comentario}</div>` :
+        (!soloLectura ? `<textarea class="control-comment" id="cmt-${c.id}" placeholder="Agregar comentario o evidencia..."></textarea>` : "")}
     </div>`;
   }).join("")}</div>`;
 
-  // Madurez buttons
-  panel.querySelectorAll(".nivel-btn").forEach(btn => {
-    btn.addEventListener("click", () => guardarRespuesta(btn.dataset.ctrl, parseInt(btn.dataset.n)));
-  });
-
-  // Aplica checkbox
-  panel.querySelectorAll(".chk-aplica").forEach(chk => {
-    chk.addEventListener("change", () => {
-      const ctrl = chk.dataset.ctrl;
-      const r = respuestas[ctrl] || {};
-      guardarRespuesta(ctrl, r.madurez || 0, r.comentario || "", chk.checked ? 1 : 0);
+  if (puedeEscribir()) {
+    // Madurez buttons
+    panel.querySelectorAll(".nivel-btn").forEach(btn => {
+      btn.addEventListener("click", () => guardarRespuesta(btn.dataset.ctrl, parseInt(btn.dataset.n)));
     });
-  });
 
-  // Comentario toggle
-  panel.querySelectorAll(".btn-comment").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const ta = document.getElementById(`cmt-${btn.dataset.ctrl}`);
-      ta.classList.toggle("visible");
-      if (ta.classList.contains("visible")) ta.focus();
+    // Aplica checkbox
+    panel.querySelectorAll(".chk-aplica").forEach(chk => {
+      chk.addEventListener("change", () => {
+        const ctrl = chk.dataset.ctrl;
+        const r = respuestas[ctrl] || {};
+        guardarRespuesta(ctrl, r.madurez || 0, r.comentario || "", chk.checked ? 1 : 0);
+      });
     });
-  });
 
-  // Comentario blur → guardar
-  panel.querySelectorAll(".control-comment").forEach(ta => {
-    const ctrlId = ta.id.replace("cmt-", "");
-    ta.addEventListener("blur", () => {
-      const r = respuestas[ctrlId] || {};
-      guardarRespuesta(ctrlId, r.madurez || 0, ta.value, r.aplica ?? 1);
+    // Comentario toggle
+    panel.querySelectorAll(".btn-comment").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const ta = document.getElementById(`cmt-${btn.dataset.ctrl}`);
+        ta.classList.toggle("visible");
+        if (ta.classList.contains("visible")) ta.focus();
+      });
     });
-  });
+
+    // Comentario blur → guardar
+    panel.querySelectorAll("textarea.control-comment").forEach(ta => {
+      const ctrlId = ta.id.replace("cmt-", "");
+      ta.addEventListener("blur", () => {
+        const r = respuestas[ctrlId] || {};
+        guardarRespuesta(ctrlId, r.madurez || 0, ta.value, r.aplica ?? 1);
+      });
+    });
+  }
 }
 
 // ── Guardar respuesta ─────────────────────────────────────────────

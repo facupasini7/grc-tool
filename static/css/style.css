@@ -1179,6 +1179,79 @@ body {
   border-radius: 12px;
 }
 
+/* ── Role badges ──────────────────────────────────────────────────── */
+.role-badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+.role-admin       { background: #6d28d9; color: #fff; }
+.role-analista    { background: #1d4ed8; color: #fff; }
+.role-externo     { background: #047857; color: #fff; }
+.role-default     { background: #475569; color: #fff; }
+
+/* Sidebar role display */
+.user-display-role.role-admin    { color: #a78bfa; }
+.user-display-role.role-analista { color: #93c5fd; }
+.user-display-role.role-externo  { color: #6ee7b7; }
+
+/* ── Gestión de Usuarios (Admin) ──────────────────────────────────── */
+.usuarios-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.usuarios-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.usuarios-table th {
+  background: var(--surface2);
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.usuarios-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  vertical-align: middle;
+}
+.usuarios-table tr:last-child td { border-bottom: none; }
+.usuarios-table tr:hover td { background: var(--surface2); }
+.user-activo   { color: var(--success); font-weight: 600; font-size: 11px; }
+.user-inactivo { color: var(--danger);  font-weight: 600; font-size: 11px; }
+
+.modal-usuario .modal-box { max-width: 440px; }
+.form-field { margin-bottom: 14px; }
+.form-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+.form-field input, .form-field select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--text);
+}
+.form-field input:focus, .form-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,70,229,.1);
+}
+
 /* ── Responsive ───────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .card-row { grid-template-columns: repeat(2, 1fr); }

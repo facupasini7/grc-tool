@@ -21,7 +21,8 @@
     <a href="#" class="nav-item" data-view="hallazgos"><span class="nav-icon">⚠️</span> Hallazgos</a>
     <a href="#" class="nav-item" data-view="cobertura"><span class="nav-icon">🗺️</span> Cobertura</a>
     <a href="#" class="nav-item" data-view="remediacion"><span class="nav-icon">📌</span> Remediación</a>
-    <a href="#" class="nav-item" data-view="auditoria"><span class="nav-icon">🕵️</span> Auditoría</a>
+    <a href="#" class="nav-item" data-view="auditoria" id="nav-auditoria"><span class="nav-icon">🕵️</span> Auditoría</a>
+    <a href="#" class="nav-item hidden" data-view="usuarios" id="nav-usuarios"><span class="nav-icon">👥</span> Usuarios</a>
   </nav>
   <div class="sidebar-user">
     <div class="user-info-row">
@@ -226,6 +227,20 @@
     <div id="kanban-board" class="kanban-board"></div>
   </div>
 
+  <!-- ── Gestión de Usuarios (admin) ─────────────────────────────────── -->
+  <div id="view-usuarios" class="view">
+    <div class="page-header row-between usuarios-header">
+      <div>
+        <h1>Gestión de Usuarios</h1>
+        <p class="subtitle">Administrá cuentas, roles y accesos al sistema.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" id="btn-nuevo-usuario">+ Nuevo usuario</button>
+      </div>
+    </div>
+    <div id="tabla-usuarios"></div>
+  </div>
+
   <!-- ── Auditoría ─────────────────────────────────────────────────────── -->
   <div id="view-auditoria" class="view">
     <div class="page-header row-between">
@@ -339,11 +354,44 @@
   </div>
 </div>
 
+<!-- Modal Nuevo/Editar Usuario -->
+<div id="modal-usuario" class="modal hidden modal-usuario">
+  <div class="modal-box">
+    <h2 id="modal-usuario-titulo">Nuevo usuario</h2>
+    <input type="hidden" id="u-id" />
+    <div class="form-field">
+      <label>Nombre completo</label>
+      <input type="text" id="u-nombre" placeholder="Ej: María García" />
+    </div>
+    <div class="form-field">
+      <label>Usuario (login)</label>
+      <input type="text" id="u-username" placeholder="Ej: mgarcia" autocomplete="off" />
+    </div>
+    <div class="form-field">
+      <label>Contraseña</label>
+      <input type="password" id="u-password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+    </div>
+    <div class="form-field">
+      <label>Rol</label>
+      <select id="u-rol">
+        <option value="analista">Analista (sube evidencia, gestiona evaluaciones)</option>
+        <option value="auditor_externo">Auditor Externo (solo lectura)</option>
+        <option value="admin">Administrador (acceso total)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="btn-cancel-usuario">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-usuario">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/app.js"></script>
 <script src="/static/js/hallazgos.js"></script>
 <script src="/static/js/evidencias.js"></script>
 <script src="/static/js/cobertura.js"></script>
 <script src="/static/js/remediacion.js"></script>
 <script src="/static/js/auditlog.js"></script>
+<script src="/static/js/usuarios.js"></script>
 </body>
 </html>
