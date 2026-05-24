@@ -5,3 +5,6 @@ data/evaluaciones.db
 reports/
 *.pdf
 .claude/
+.coverage
+htmlcov/
+server.log
