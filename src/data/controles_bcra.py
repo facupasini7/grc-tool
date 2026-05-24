@@ -8,12 +8,16 @@ y control de los riesgos de tecnología y seguridad de la información asociados
 a los servicios financieros digitales" (RUNOR 1-1799).
 
 Controles organizados por sección y subsección según los textos ordenados
-originales del BCRA.
+originales del BCRA. Cada control incluye el campo 'evidencia_requerida' con
+los documentos y artefactos que el auditado debe presentar para demostrar
+cumplimiento.
 """
 
-DOMINIOS_BCRA = {
+# ── Dominios por norma ───────────────────────────────────────────────────────
+
+DOMINIOS_A7777 = {
     "S2":  "A7777 — Sec. 2: Gobierno de tecnología y seguridad de la información",
-    "S3":  "A7777 — Sec. 3: Gestión de riesgos de tecnología y seguridad de la información",
+    "S3":  "A7777 — Sec. 3: Gestión de riesgos de TI y SI",
     "S4":  "A7777 — Sec. 4: Gestión de tecnología de la información",
     "S5":  "A7777 — Sec. 5: Gestión de seguridad de la información",
     "S6":  "A7777 — Sec. 6: Gestión de la continuidad del negocio",
@@ -21,8 +25,15 @@ DOMINIOS_BCRA = {
     "S8":  "A7777 — Sec. 8: Gestión de ciberincidentes",
     "S9":  "A7777 — Sec. 9: Desarrollo, adquisición y mantenimiento de software",
     "S10": "A7777 — Sec. 10: Gestión de la relación con terceras partes",
+}
+
+DOMINIOS_A7783 = {
     "S11": "A7783 — Servicios financieros digitales",
 }
+
+DOMINIOS_BCRA = {**DOMINIOS_A7777, **DOMINIOS_A7783}
+
+# ── Controles ────────────────────────────────────────────────────────────────
 
 CONTROLES_BCRA = [
 
@@ -32,6 +43,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-2.1.1",
+        "norma": "A7777",
         "nombre": "Directorio — Responsabilidades de gobierno de TI y SI",
         "descripcion": (
             "El Directorio o autoridad equivalente deberá: establecer y mantener componentes de gobierno "
@@ -47,9 +59,18 @@ CONTROLES_BCRA = [
         "dominio": "S2",
         "referencia": "Com. A 7777 — Sección 2.1.1",
         "iso_mapping": ["A.5.1", "A.5.2", "A.5.4"],
+        "evidencia_requerida": [
+            "Actas de reuniones del Directorio con tratamiento de temas de TI y SI",
+            "Política de gobierno de TI y SI aprobada formalmente por el Directorio",
+            "Estructura organizacional de TI y SI aprobada (organigrama firmado)",
+            "Marco de apetito de riesgo de TI aprobado por el Directorio",
+            "Informes de desempeño de TI y SI presentados al Directorio",
+            "Registro de proyectos estratégicos de TI supervisados por el Directorio",
+        ],
     },
     {
         "id": "A7777-2.1.2",
+        "norma": "A7777",
         "nombre": "Alta Gerencia — Responsabilidades de gestión de TI y SI",
         "descripcion": (
             "La Alta Gerencia deberá: diseñar estrategias y planes de TI y definir el presupuesto necesario; "
@@ -65,9 +86,18 @@ CONTROLES_BCRA = [
         "dominio": "S2",
         "referencia": "Com. A 7777 — Sección 2.1.2",
         "iso_mapping": ["A.5.2", "A.5.3", "A.5.4"],
+        "evidencia_requerida": [
+            "Plan estratégico de TI aprobado por la Alta Gerencia",
+            "Presupuesto de TI y SI aprobado y documentado",
+            "Matriz de roles y responsabilidades de TI y SI con asignaciones formales",
+            "Políticas de alto nivel de TI y SI aprobadas (con firma de la Alta Gerencia)",
+            "Planes de mitigación de riesgos de TI aprobados",
+            "Protocolo de comunicación ante crisis (aprobado y vigente)",
+        ],
     },
     {
         "id": "A7777-2.1.4",
+        "norma": "A7777",
         "nombre": "Comité de gobierno de TI y seguridad de la información",
         "descripcion": (
             "Las entidades deberán definir al menos un comité de gobierno de TI y SI, integrado por un miembro "
@@ -81,9 +111,17 @@ CONTROLES_BCRA = [
         "dominio": "S2",
         "referencia": "Com. A 7777 — Sección 2.1.4",
         "iso_mapping": ["A.5.2", "A.5.4"],
+        "evidencia_requerida": [
+            "Acta de constitución formal del Comité de TI y SI (con integrantes designados)",
+            "Reglamento o carta del Comité (funciones, periodicidad, quórum)",
+            "Actas de las últimas reuniones del Comité (mínimo 4 por año)",
+            "Registro de seguimiento de acciones correctivas acordadas en el Comité",
+            "Informes presentados al Directorio por el Comité",
+        ],
     },
     {
         "id": "A7777-2.2",
+        "norma": "A7777",
         "nombre": "Segregación de funciones de TI y seguridad de la información",
         "descripcion": (
             "Las entidades deberán establecer formalmente una delimitación de roles y responsabilidades que "
@@ -97,9 +135,16 @@ CONTROLES_BCRA = [
         "dominio": "S2",
         "referencia": "Com. A 7777 — Sección 2.2",
         "iso_mapping": ["A.5.3", "A.6.1"],
+        "evidencia_requerida": [
+            "Matriz de segregación de funciones de TI y SI (actualizada)",
+            "Descripciones formales de puestos con delimitación de funciones incompatibles",
+            "Evidencia de controles compensatorios (si hay excepciones aprobadas por el Directorio)",
+            "Resolución del Directorio asumiendo el riesgo ante funciones no segregadas (si aplica)",
+        ],
     },
     {
         "id": "A7777-2.3",
+        "norma": "A7777",
         "nombre": "Marco normativo de TI y seguridad de la información",
         "descripcion": (
             "Las entidades deberán establecer un marco normativo formalizado que incluya políticas, normas y "
@@ -112,6 +157,13 @@ CONTROLES_BCRA = [
         "dominio": "S2",
         "referencia": "Com. A 7777 — Sección 2.3",
         "iso_mapping": ["A.5.1", "A.5.31", "A.5.36"],
+        "evidencia_requerida": [
+            "Índice del marco normativo vigente (políticas, normas y procedimientos)",
+            "Políticas aprobadas con fecha de aprobación, versión y responsable",
+            "Evidencia de comunicación formal del marco normativo a empleados y terceros",
+            "Proceso o calendario de revisión periódica de políticas (y registros de revisiones)",
+            "Repositorio centralizado o intranet donde se publican las normas",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -120,6 +172,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-3",
+        "norma": "A7777",
         "nombre": "Marco de gestión de riesgos de TI y seguridad de la información",
         "descripcion": (
             "Las entidades deberán establecer un área o función de gestión de riesgos de TI y SI, independiente "
@@ -135,6 +188,15 @@ CONTROLES_BCRA = [
         "dominio": "S3",
         "referencia": "Com. A 7777 — Sección 3",
         "iso_mapping": ["A.5.7", "A.5.8", "A.6.1"],
+        "evidencia_requerida": [
+            "Estructura organizacional del área de Gestión de Riesgos de TI y SI (independiente)",
+            "Política y metodología de gestión de riesgos de TI y SI aprobada",
+            "Registro de riesgos de TI y SI actualizado (con valoración, propietario y estado)",
+            "Declaración formal de tolerancia/apetito al riesgo aprobada",
+            "Informes periódicos de exposición al riesgo presentados a la Alta Gerencia",
+            "Indicadores clave de riesgo (KRIs) definidos y monitoreados",
+            "Análisis de riesgos de escenarios específicos (IA/ML, obsolescencia, terceros, DLT)",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -143,6 +205,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-4.1",
+        "norma": "A7777",
         "nombre": "Estrategia de tecnología de la información",
         "descripcion": (
             "Las entidades deberán establecer una estrategia de TI acorde a sus operaciones, procesos y "
@@ -154,9 +217,17 @@ CONTROLES_BCRA = [
         "dominio": "S4",
         "referencia": "Com. A 7777 — Sección 4.1",
         "iso_mapping": ["A.5.1", "A.5.8"],
+        "evidencia_requerida": [
+            "Plan estratégico de TI documentado y aprobado (vigente)",
+            "Objetivos estratégicos de TI con métricas y metas medibles",
+            "Planes de acción con responsables y cronogramas",
+            "Informes de seguimiento del plan estratégico (revisiones periódicas)",
+            "Evidencia de alineación entre la estrategia de TI y los objetivos del negocio",
+        ],
     },
     {
         "id": "A7777-4.2",
+        "norma": "A7777",
         "nombre": "Arquitectura empresarial",
         "descripcion": (
             "Las entidades deberán establecer un modelo de arquitectura empresarial que coordine la estrategia "
@@ -169,9 +240,17 @@ CONTROLES_BCRA = [
         "dominio": "S4",
         "referencia": "Com. A 7777 — Sección 4.2",
         "iso_mapping": ["A.5.8", "A.8.20"],
+        "evidencia_requerida": [
+            "Documento de arquitectura empresarial aprobado",
+            "Diagramas de arquitectura tecnológica y de aplicaciones (actualizados)",
+            "Principios y estándares de arquitectura documentados",
+            "Mapa de integración e interoperabilidad con sistemas propios y de terceros",
+            "Análisis de brecha (AS-IS vs. TO-BE) de arquitectura",
+        ],
     },
     {
         "id": "A7777-4.3",
+        "norma": "A7777",
         "nombre": "Presupuesto, inversiones y gestión de portafolio de TI",
         "descripcion": (
             "Las entidades deberán establecer prácticas efectivas para la elaboración de presupuestos de TI y "
@@ -184,9 +263,17 @@ CONTROLES_BCRA = [
         "dominio": "S4",
         "referencia": "Com. A 7777 — Sección 4.3",
         "iso_mapping": ["A.5.8"],
+        "evidencia_requerida": [
+            "Presupuesto de TI aprobado para el ejercicio vigente",
+            "Registro del portafolio de proyectos e iniciativas de TI",
+            "Reportes de ejecución presupuestaria con análisis de desvíos",
+            "Proceso documentado de priorización y aprobación de inversiones en TI",
+            "Comunicaciones formales de desvíos presupuestarios a la Alta Gerencia",
+        ],
     },
     {
         "id": "A7777-4.3.1",
+        "norma": "A7777",
         "nombre": "Gestión de proyectos de TI",
         "descripcion": (
             "Las entidades deberán establecer un marco para la gestión de proyectos que abarque todo su ciclo "
@@ -200,9 +287,17 @@ CONTROLES_BCRA = [
         "dominio": "S4",
         "referencia": "Com. A 7777 — Sección 4.3.1",
         "iso_mapping": ["A.5.8", "A.8.32"],
+        "evidencia_requerida": [
+            "Marco de gestión de proyectos documentado (metodología adoptada)",
+            "Actas de inicio y cierre de proyectos significativos",
+            "Informes de estado de proyectos con seguimiento de desvíos",
+            "Análisis de riesgos de proyectos relevantes",
+            "Registros de notificación a la Gerencia de Auditoría Externa de Sistemas (cuando aplica)",
+        ],
     },
     {
         "id": "A7777-4.4",
+        "norma": "A7777",
         "nombre": "Gestión de datos",
         "descripcion": (
             "Las entidades deberán definir un proceso con responsabilidades, políticas y procedimientos para la "
@@ -217,9 +312,18 @@ CONTROLES_BCRA = [
         "dominio": "S4",
         "referencia": "Com. A 7777 — Sección 4.4",
         "iso_mapping": ["A.5.9", "A.5.10", "A.5.12", "A.5.13", "A.8.10"],
+        "evidencia_requerida": [
+            "Política de gestión de datos aprobada (ciclo de vida completo)",
+            "Inventario de datos clasificados (estructurados y no estructurados)",
+            "Política de clasificación de datos con criterios de integridad, disponibilidad y confidencialidad",
+            "Procedimientos de eliminación segura de datos y registros de su aplicación",
+            "Procedimientos de backup conforme a la clasificación de datos",
+            "Evidencia de supervisión del cumplimiento de políticas de datos",
+        ],
     },
     {
         "id": "A7777-4.5",
+        "norma": "A7777",
         "nombre": "Gestión de activos de información",
         "descripcion": (
             "Las entidades deberán definir un proceso con responsabilidades, políticas y procedimientos para la "
@@ -232,9 +336,17 @@ CONTROLES_BCRA = [
         "dominio": "S4",
         "referencia": "Com. A 7777 — Sección 4.5",
         "iso_mapping": ["A.5.9", "A.5.10", "A.5.11"],
+        "evidencia_requerida": [
+            "Inventario de activos de información actualizado (con propietario asignado)",
+            "Política de clasificación de activos de información",
+            "Evidencia de revisiones periódicas del inventario de activos",
+            "Registro de activos delegados en terceras partes (con ubicación e interdependencias)",
+            "Procedimiento de alta/baja/modificación de activos en el inventario",
+        ],
     },
     {
         "id": "A7777-4.6",
+        "norma": "A7777",
         "nombre": "Inteligencia artificial o aprendizaje automático",
         "descripcion": (
             "Las entidades deberán identificar y documentar el objetivo del uso de IA o aprendizaje automático "
@@ -249,9 +361,17 @@ CONTROLES_BCRA = [
         "dominio": "S4",
         "referencia": "Com. A 7777 — Sección 4.6",
         "iso_mapping": ["A.5.7", "A.5.8"],
+        "evidencia_requerida": [
+            "Registro de modelos de IA/ML en uso (con objetivo, datos de entrenamiento y propietario)",
+            "Análisis de riesgos de modelos de IA/ML (sesgos, privacidad, discrepancias)",
+            "Documentación de transparencia y explicabilidad de cada modelo",
+            "Evidencia de revisiones periódicas de resultados vs. tolerancia al riesgo",
+            "Comunicación a clientes sobre el uso de IA/ML en los servicios (si aplica)",
+        ],
     },
     {
         "id": "A7777-4.7",
+        "norma": "A7777",
         "nombre": "Control y reportes de gestión de TI",
         "descripcion": (
             "Las entidades deberán definir un proceso de control sobre la gestión de áreas de TI, mediante "
@@ -266,6 +386,13 @@ CONTROLES_BCRA = [
         "dominio": "S4",
         "referencia": "Com. A 7777 — Sección 4.7",
         "iso_mapping": ["A.5.36", "A.8.6", "A.8.16"],
+        "evidencia_requerida": [
+            "Dashboard o reportes periódicos de gestión de TI (disponibilidad, capacidad, cambios)",
+            "Indicadores clave de desempeño (KPIs) de TI con umbrales definidos",
+            "Reportes de cumplimiento de SLAs (propios y de terceros)",
+            "Informes de avance y riesgo de proyectos de TI presentados a la Alta Gerencia",
+            "Planes de acción ante incumplimientos e indicadores fuera de umbral",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -274,6 +401,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-5.1",
+        "norma": "A7777",
         "nombre": "Marco de gestión de seguridad de la información",
         "descripcion": (
             "Las entidades deberán establecer un marco de gestión de la seguridad de la información que "
@@ -288,9 +416,15 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.1",
         "iso_mapping": ["A.5.1", "A.5.2"],
+        "evidencia_requerida": [
+            "Marco de gestión de SI documentado y aprobado formalmente",
+            "Política de seguridad de la información vigente (con fecha de aprobación y revisión)",
+            "Mapa de procesos de SI que cubra protección, detección, respuesta y recuperación",
+        ],
     },
     {
         "id": "A7777-5.2",
+        "norma": "A7777",
         "nombre": "Estrategia de seguridad de la información",
         "descripcion": (
             "Las entidades deberán definir una estrategia de seguridad de la información alineada con la "
@@ -305,9 +439,17 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.2",
         "iso_mapping": ["A.5.1", "A.5.7", "A.5.8"],
+        "evidencia_requerida": [
+            "Estrategia de seguridad de la información documentada y aprobada",
+            "Objetivos estratégicos de SI con métricas e indicadores de cumplimiento",
+            "Plan de acción de SI con responsables y cronogramas",
+            "Evidencia de alineación con la estrategia de TI y los resultados de gestión de riesgos",
+            "Análisis de amenazas y vulnerabilidades del entorno tecnológico",
+        ],
     },
     {
         "id": "A7777-5.3",
+        "norma": "A7777",
         "nombre": "Normas y procedimientos de seguridad de la información",
         "descripcion": (
             "Las entidades deberán establecer normas y procedimientos para gestionar, controlar y documentar "
@@ -322,9 +464,21 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.3",
         "iso_mapping": ["A.5.1", "A.5.17", "A.8.7", "A.8.8", "A.8.9", "A.8.24"],
+        "evidencia_requerida": [
+            "Política de control de accesos vigente",
+            "Política de gestión de contraseñas y autenticación",
+            "Política de gestión de vulnerabilidades",
+            "Procedimiento de detección y monitoreo de eventos de seguridad",
+            "Estándar de hardening (configuraciones seguras por tipo de activo)",
+            "Política de criptografía (algoritmos aprobados y vigentes)",
+            "Política de uso de dispositivos de la entidad y BYOD",
+            "Procedimiento de detección y regularización de software no autorizado",
+            "Estándares de informática forense",
+        ],
     },
     {
         "id": "A7777-5.5",
+        "norma": "A7777",
         "nombre": "Programas de capacitación y concientización en SI",
         "descripcion": (
             "Las entidades deberán establecer programas de capacitación y concientización en seguridad de la "
@@ -339,9 +493,18 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.5",
         "iso_mapping": ["A.6.3"],
+        "evidencia_requerida": [
+            "Programa anual de capacitación y concientización aprobado",
+            "Registros de asistencia/completitud de capacitaciones realizadas",
+            "Indicadores de cumplimiento del programa (% de cobertura de la organización)",
+            "Evidencia de incorporación de lecciones aprendidas de ciberincidentes",
+            "Material de concientización dirigido a clientes/usuarios de servicios financieros",
+            "Resultados de evaluaciones o pruebas de phishing simulado (si aplica)",
+        ],
     },
     {
         "id": "A7777-5.7.1",
+        "norma": "A7777",
         "nombre": "Seguridad física y medioambiental",
         "descripcion": (
             "Las entidades deberán diseñar e implementar controles para evitar puntos únicos de falla y mitigar "
@@ -357,9 +520,18 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.7.1",
         "iso_mapping": ["A.7.1", "A.7.2", "A.7.3", "A.7.4", "A.7.5", "A.7.6"],
+        "evidencia_requerida": [
+            "Plano de áreas de procesamiento con controles físicos implementados",
+            "Inventario de sistemas de seguridad física (UPS, climatización, CCTV, control de acceso, extinción)",
+            "Registros de mantenimiento preventivo de sistemas de seguridad física",
+            "Registros de accesos físicos al centro de procesamiento de datos",
+            "Procedimiento de autorización y registro de retiro/traslado de activos",
+            "Evidencia de pruebas periódicas de sistemas de energía redundante y extinción de incendios",
+        ],
     },
     {
         "id": "A7777-5.7.2",
+        "norma": "A7777",
         "nombre": "Control de accesos y gestión de privilegios",
         "descripcion": (
             "Las entidades deberán definir un proceso de gestión que permita solicitar, aprobar, asignar, "
@@ -376,9 +548,20 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.7.2",
         "iso_mapping": ["A.5.15", "A.5.16", "A.5.17", "A.5.18", "A.8.2", "A.8.3", "A.8.4", "A.8.5"],
+        "evidencia_requerida": [
+            "Política de control de accesos y gestión de privilegios vigente",
+            "Inventario de cuentas privilegiadas y de servicio (actualizado)",
+            "Matriz de roles y permisos (RBAC/ABAC) con aprobaciones formales",
+            "Evidencia de revisiones periódicas de accesos (certificación de accesos)",
+            "Procedimiento de revocación de accesos ante desvinculación o cambio de rol",
+            "Evidencia de implementación de MFA para cuentas privilegiadas",
+            "Evidencia de herramienta PAM implementada (si aplica)",
+            "Registros de solicitudes y aprobaciones de acceso",
+        ],
     },
     {
         "id": "A7777-5.7.2.2",
+        "norma": "A7777",
         "nombre": "Métodos de autenticación",
         "descripcion": (
             "Para la selección e implementación de métodos de autenticación y sus factores, las entidades "
@@ -395,9 +578,17 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Secciones 5.7.2.2 y 5.7.2.3",
         "iso_mapping": ["A.5.17", "A.8.5"],
+        "evidencia_requerida": [
+            "Estándar de métodos de autenticación vigente (con reglas mínimas por tipo de factor)",
+            "Configuración de políticas de contraseñas en sistemas (longitud mínima, complejidad, vigencia)",
+            "Evidencia de limitación de intentos fallidos de autenticación",
+            "Documentación de autenticación fuera de banda (canal cifrado) donde aplica",
+            "Inventario de dispositivos criptográficos (tokens, smartcards) en uso",
+        ],
     },
     {
         "id": "A7777-5.7.2.4",
+        "norma": "A7777",
         "nombre": "Requisitos generales para la autenticación multifactor",
         "descripcion": (
             "Las entidades deberán evaluar la utilización de autenticación multifactor para el acceso a los "
@@ -411,9 +602,17 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.7.2.4",
         "iso_mapping": ["A.8.5"],
+        "evidencia_requerida": [
+            "Evaluación de riesgos que justifica la aplicación de MFA por tipo de acceso",
+            "Política de MFA aprobada (con alcance y requisitos mínimos)",
+            "Evidencia de implementación de MFA para accesos a activos críticos",
+            "Configuración del generador OTP (algoritmo, tiempo de vida, longitud mínima de 6 dígitos)",
+            "Registro de excepciones al MFA con controles compensatorios documentados",
+        ],
     },
     {
         "id": "A7777-5.7.4",
+        "norma": "A7777",
         "nombre": "Controles sobre la información (cifrado y DLP)",
         "descripcion": (
             "Las entidades deberán implementar medidas para detectar y evitar el acceso, modificación, copia "
@@ -429,9 +628,18 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.7.4",
         "iso_mapping": ["A.8.7", "A.8.10", "A.8.11", "A.8.12", "A.8.24"],
+        "evidencia_requerida": [
+            "Política de cifrado de datos (en tránsito y en reposo, con algoritmos aprobados)",
+            "Inventario de datos cifrados (sistemas, bases de datos, dispositivos de usuario)",
+            "Evidencia de implementación de controles DLP (reportes o configuración)",
+            "Procedimiento de borrado seguro de dispositivos y registros de su aplicación",
+            "Evidencia de enmascaramiento de datos en entornos no productivos",
+            "Reportes de antivirus/EDR y evidencia de protección contra código malicioso",
+        ],
     },
     {
         "id": "A7777-5.8.1",
+        "norma": "A7777",
         "nombre": "Detección, monitoreo y análisis de eventos de seguridad",
         "descripcion": (
             "Las entidades deberán establecer un proceso para el registro y análisis de información vinculada "
@@ -448,9 +656,19 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.8.1",
         "iso_mapping": ["A.8.15", "A.8.16", "A.8.17"],
+        "evidencia_requerida": [
+            "Política de monitoreo y registro de eventos de seguridad",
+            "Inventario de fuentes de logs recolectadas (sistemas, redes, aplicaciones)",
+            "Evidencia de implementación de SIEM o plataforma de correlación de eventos",
+            "Definición de umbrales y alertas configuradas (incluyendo accesos privilegiados)",
+            "Perfiles de comportamiento (UEBA) definidos y revisados periódicamente",
+            "Registros conservados con evidencia de protección de integridad de logs",
+            "Métricas de monitoreo reportadas periódicamente a la gerencia",
+        ],
     },
     {
         "id": "A7777-5.8.2",
+        "norma": "A7777",
         "nombre": "Gestión de amenazas y vulnerabilidades",
         "descripcion": (
             "Las entidades deberán establecer un proceso para recolectar, procesar, analizar e interpretar "
@@ -465,6 +683,15 @@ CONTROLES_BCRA = [
         "dominio": "S5",
         "referencia": "Com. A 7777 — Sección 5.8.2",
         "iso_mapping": ["A.5.7", "A.8.7", "A.8.8"],
+        "evidencia_requerida": [
+            "Proceso de gestión de vulnerabilidades documentado (política y procedimiento)",
+            "Suscripción a fuentes de inteligencia de amenazas (feeds CTI, alertas CERT)",
+            "Registro de vulnerabilidades identificadas con estado y cronograma de remediación",
+            "Informes de escaneo de vulnerabilidades (con frecuencia definida)",
+            "Evidencia de pruebas de penetración periódicas y planes de remediación",
+            "Registro de perfiles no autorizados en redes sociales detectados y eliminados",
+            "Criterios de priorización de vulnerabilidades por criticidad (CVSS u otro estándar)",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -473,6 +700,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-6.1",
+        "norma": "A7777",
         "nombre": "Marco de gestión de la continuidad del negocio",
         "descripcion": (
             "Las entidades deberán establecer un marco de gestión de la continuidad del negocio que considere: "
@@ -487,9 +715,17 @@ CONTROLES_BCRA = [
         "dominio": "S6",
         "referencia": "Com. A 7777 — Sección 6.1",
         "iso_mapping": ["A.5.29", "A.5.30"],
+        "evidencia_requerida": [
+            "Política de gestión de continuidad del negocio aprobada formalmente",
+            "Marco de continuidad documentado (alineado con RRCI del BCRA)",
+            "Programa anual de ejercicios de continuidad aprobado",
+            "Planes de capacitación en continuidad del negocio",
+            "Evidencia de alineación del marco con la gestión de riesgos y arquitectura empresarial",
+        ],
     },
     {
         "id": "A7777-6.2",
+        "norma": "A7777",
         "nombre": "Ciberresiliencia en la continuidad del negocio",
         "descripcion": (
             "Las entidades deberán establecer medidas proactivas en el diseño de operaciones y procesos para "
@@ -503,9 +739,18 @@ CONTROLES_BCRA = [
         "dominio": "S6",
         "referencia": "Com. A 7777 — Sección 6.2",
         "iso_mapping": ["A.5.29", "A.5.30", "A.8.13", "A.8.14"],
+        "evidencia_requerida": [
+            "Estrategia de ciberresiliencia documentada",
+            "Plan de recuperación ante ciberataques específicos",
+            "Estrategia y procedimiento de backups con replicación fuera de línea",
+            "Mapa de dependencias críticas (terceros, interconexiones, suministros)",
+            "Plan de disponibilidad de personal esencial ante eventos disruptivos",
+            "Procedimiento de gestión de cambios de emergencia",
+        ],
     },
     {
         "id": "A7777-6.3",
+        "norma": "A7777",
         "nombre": "Análisis de impacto del negocio (BIA) y evaluación de riesgos",
         "descripcion": (
             "Las entidades deberán implementar un proceso para la elaboración de análisis de impacto del "
@@ -521,9 +766,17 @@ CONTROLES_BCRA = [
         "dominio": "S6",
         "referencia": "Com. A 7777 — Sección 6.3",
         "iso_mapping": ["A.5.29", "A.5.30"],
+        "evidencia_requerida": [
+            "Análisis de Impacto del Negocio (BIA) actualizado (con participación de todas las áreas)",
+            "Definición de RTO y RPO por proceso/servicio crítico",
+            "Identificación de interdependencias de procesos y dependencias de terceras partes",
+            "Evaluación de riesgos de escenarios disruptivos (por geografía, tipo de amenaza)",
+            "Informe de resultados del BIA presentado a la Alta Gerencia",
+        ],
     },
     {
         "id": "A7777-6.4",
+        "norma": "A7777",
         "nombre": "Estrategias y planes de continuidad del negocio (BCP)",
         "descripcion": (
             "Las entidades deberán desarrollar estrategias de continuidad del negocio para cumplir con los "
@@ -538,9 +791,17 @@ CONTROLES_BCRA = [
         "dominio": "S6",
         "referencia": "Com. A 7777 — Sección 6.4",
         "iso_mapping": ["A.5.29", "A.5.30", "A.8.13", "A.8.14"],
+        "evidencia_requerida": [
+            "Planes de Continuidad del Negocio (BCP) aprobados y vigentes por proceso/servicio crítico",
+            "Procedimientos de declaración de crisis y criterios de activación de planes",
+            "Plan de recuperación de TI (DRP) con infraestructura y sistemas críticos priorizados",
+            "Acuerdos de uso de sitios/infraestructura alternativos (DRS)",
+            "Procedimientos de canales de atención alternativos para clientes durante una crisis",
+        ],
     },
     {
         "id": "A7777-6.6",
+        "norma": "A7777",
         "nombre": "Ejercicios y pruebas de los planes de continuidad del negocio",
         "descripcion": (
             "Las entidades deberán desarrollar un plan de ejercicios y pruebas para verificar que las "
@@ -556,6 +817,13 @@ CONTROLES_BCRA = [
         "dominio": "S6",
         "referencia": "Com. A 7777 — Sección 6.6",
         "iso_mapping": ["A.5.29", "A.5.30"],
+        "evidencia_requerida": [
+            "Cronograma anual de ejercicios de continuidad (aprobado)",
+            "Informes de resultados de ejercicios realizados (con participantes y hallazgos)",
+            "Planes de acción ante deficiencias identificadas en los ejercicios",
+            "Evidencia de participación de áreas usuarias, TI, SI, terceras partes y auditoría interna",
+            "Evidencia de actualización de planes a partir de lecciones aprendidas",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -564,6 +832,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-7.1",
+        "norma": "A7777",
         "nombre": "Gestión de la infraestructura tecnológica",
         "descripcion": (
             "Las entidades deberán definir estructuras, procesos y procedimientos para las actividades de "
@@ -578,9 +847,17 @@ CONTROLES_BCRA = [
         "dominio": "S7",
         "referencia": "Com. A 7777 — Sección 7.1",
         "iso_mapping": ["A.8.6", "A.8.9"],
+        "evidencia_requerida": [
+            "Política y procedimientos de gestión de infraestructura tecnológica",
+            "Diagrama de infraestructura actualizado (con redundancias documentadas)",
+            "Evidencia de medidas implementadas para evitar puntos únicos de falla",
+            "Registros del sistema de gestión de servicios de TI (mesa de ayuda/ITSM)",
+            "Métricas de disponibilidad de infraestructura reportadas periódicamente",
+        ],
     },
     {
         "id": "A7777-7.2",
+        "norma": "A7777",
         "nombre": "Gestión de cambios en producción",
         "descripcion": (
             "Las entidades deberán establecer un proceso para registrar, evaluar, planificar, revisar, aprobar "
@@ -595,9 +872,18 @@ CONTROLES_BCRA = [
         "dominio": "S7",
         "referencia": "Com. A 7777 — Sección 7.2",
         "iso_mapping": ["A.8.31", "A.8.32"],
+        "evidencia_requerida": [
+            "Política de gestión de cambios aprobada (con criterios de categorización y aprobación)",
+            "Registro de solicitudes de cambio (RFC) con aprobaciones y análisis de impacto",
+            "Evidencia de separación de entornos (desarrollo / testing / producción)",
+            "Actas de CAB (Change Advisory Board) o equivalente",
+            "Procedimientos de rollback documentados y probados",
+            "Registros de cambios implementados con evidencia de trazabilidad",
+        ],
     },
     {
         "id": "A7777-7.3",
+        "norma": "A7777",
         "nombre": "Actualización de infraestructura y gestión de configuraciones",
         "descripcion": (
             "Las entidades deberán establecer un proceso de gestión de actualizaciones de infraestructura "
@@ -614,9 +900,18 @@ CONTROLES_BCRA = [
         "dominio": "S7",
         "referencia": "Com. A 7777 — Sección 7.3",
         "iso_mapping": ["A.8.8", "A.8.9"],
+        "evidencia_requerida": [
+            "Plan de actualización de infraestructura (con activos obsoletos identificados)",
+            "Estándares de configuración (hardening) por tipo de activo/plataforma",
+            "Base de datos de configuraciones (CMDB) actualizada",
+            "Reportes de cumplimiento de configuraciones (vs. baseline/estándar)",
+            "Registro de actualizaciones de seguridad aplicadas (con evidencia de prueba previa)",
+            "Evaluación de riesgos por uso de activos con soporte finalizado (EOL)",
+        ],
     },
     {
         "id": "A7777-7.4",
+        "norma": "A7777",
         "nombre": "Gestión de las comunicaciones de red",
         "descripcion": (
             "Las entidades deberán establecer un proceso para la gestión de las comunicaciones que permita: "
@@ -631,9 +926,18 @@ CONTROLES_BCRA = [
         "dominio": "S7",
         "referencia": "Com. A 7777 — Sección 7.4",
         "iso_mapping": ["A.8.20", "A.8.21", "A.8.22"],
+        "evidencia_requerida": [
+            "Diagrama de topología de red actualizado (con segmentación y elementos de seguridad)",
+            "Documentación de interfaces, conexiones externas y zonas de red",
+            "Logs de actividad de dispositivos de red (conservados con período definido)",
+            "Evidencia de monitoreo de red en tiempo real (herramienta de NMS/NPM)",
+            "Métricas de disponibilidad y calidad de servicios de red",
+            "Informes de revisiones periódicas de la infraestructura de comunicaciones",
+        ],
     },
     {
         "id": "A7777-7.6",
+        "norma": "A7777",
         "nombre": "Gestión de copias de respaldo de datos",
         "descripcion": (
             "Las entidades deberán definir una estrategia para la realización de copias de respaldo que garantice "
@@ -650,9 +954,18 @@ CONTROLES_BCRA = [
         "dominio": "S7",
         "referencia": "Com. A 7777 — Sección 7.6",
         "iso_mapping": ["A.8.13"],
+        "evidencia_requerida": [
+            "Política de backup aprobada (alcance, frecuencia, retención, tipos de medios)",
+            "Registros de backups realizados (con estado de éxito/falla)",
+            "Evidencia de pruebas de restauración exitosas (periódicas, al menos anual)",
+            "Evidencia de al menos 2 copias de información de clientes, contable y transaccional",
+            "Evidencia de copias fuera de línea (offline/air-gap) para datos críticos",
+            "Controles de acceso y cifrado de los medios de backup",
+        ],
     },
     {
         "id": "A7777-7.7",
+        "norma": "A7777",
         "nombre": "Monitoreo de la infraestructura tecnológica y procesamiento",
         "descripcion": (
             "Las entidades deberán implementar procesos de monitoreo de la infraestructura tecnológica y del "
@@ -667,6 +980,13 @@ CONTROLES_BCRA = [
         "dominio": "S7",
         "referencia": "Com. A 7777 — Sección 7.7",
         "iso_mapping": ["A.8.6", "A.8.16"],
+        "evidencia_requerida": [
+            "Dashboard de monitoreo de infraestructura (disponibilidad, utilización de recursos)",
+            "KPIs de desempeño de infraestructura con umbrales definidos",
+            "Alertas configuradas ante fallos de sistemas o superación de umbrales",
+            "Reportes periódicos de desempeño presentados a la Alta Gerencia",
+            "Planes de mejora o actualización derivados de resultados del monitoreo",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -675,6 +995,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-8.1",
+        "norma": "A7777",
         "nombre": "Preparación de la respuesta ante ciberincidentes",
         "descripcion": (
             "Las entidades deberán establecer normas y procedimientos para gestionar, controlar y documentar "
@@ -690,9 +1011,18 @@ CONTROLES_BCRA = [
         "dominio": "S8",
         "referencia": "Com. A 7777 — Sección 8.1",
         "iso_mapping": ["A.5.24", "A.5.25", "A.5.26", "A.5.27"],
+        "evidencia_requerida": [
+            "Política y procedimientos de gestión de ciberincidentes aprobados",
+            "Taxonomía de ciberincidentes documentada (con criterios de priorización)",
+            "Flujogramas de respuesta ante ciberincidentes (con roles y escalamiento)",
+            "Plan de comunicación ante crisis (interno y externo, incluyendo clientes y BCRA)",
+            "Criterios y procedimientos de análisis forense y conservación de evidencia",
+            "Alineación documentada con la política de continuidad del negocio",
+        ],
     },
     {
         "id": "A7777-8.1.1",
+        "norma": "A7777",
         "nombre": "Registro y repositorio de ciberincidentes",
         "descripcion": (
             "Las entidades deberán establecer y mantener un registro completo de sus ciberincidentes que "
@@ -708,9 +1038,17 @@ CONTROLES_BCRA = [
         "dominio": "S8",
         "referencia": "Com. A 7777 — Sección 8.1.1",
         "iso_mapping": ["A.5.26", "A.5.27", "A.5.28"],
+        "evidencia_requerida": [
+            "Repositorio/sistema de registro de ciberincidentes (con evidencia de integridad)",
+            "Registro de los últimos 12 meses de ciberincidentes (con trazabilidad hasta causa raíz)",
+            "Evidencia de análisis de causa raíz documentado para incidentes significativos",
+            "Evidencia de correlación entre incidentes y reclamos de clientes/fraudes (si aplica)",
+            "Métricas de ciberincidentes (cantidad, tiempo de detección, tiempo de resolución)",
+        ],
     },
     {
         "id": "A7777-8.1.3",
+        "norma": "A7777",
         "nombre": "Comunicación y notificación de ciberincidentes al BCRA",
         "descripcion": (
             "Los procedimientos de comunicación y notificación deberán permitir la comunicación eficaz de los "
@@ -723,9 +1061,17 @@ CONTROLES_BCRA = [
         "dominio": "S8",
         "referencia": "Com. A 7777 — Sección 8.1.3",
         "iso_mapping": ["A.5.26", "A.5.27"],
+        "evidencia_requerida": [
+            "Procedimiento de notificación al BCRA ante ciberincidentes significativos",
+            "Canal/punto de contacto público para reporte de incidentes (empleados, terceros, clientes)",
+            "Registros de notificaciones al BCRA realizadas (si hubiera ciberincidentes reportables)",
+            "Evidencia de acuse de recibo o seguimiento ante reportes realizados al BCRA",
+            "Directorio de contactos de respuesta ante incidentes (interno y externo)",
+        ],
     },
     {
         "id": "A7777-8.2",
+        "norma": "A7777",
         "nombre": "Ejercicios y pruebas de la respuesta ante ciberincidentes",
         "descripcion": (
             "Las entidades deberán establecer un plan de pruebas de las actividades previstas para la respuesta "
@@ -738,6 +1084,13 @@ CONTROLES_BCRA = [
         "dominio": "S8",
         "referencia": "Com. A 7777 — Sección 8.2",
         "iso_mapping": ["A.5.26", "A.5.29"],
+        "evidencia_requerida": [
+            "Plan anual de ejercicios de respuesta ante ciberincidentes (aprobado)",
+            "Informes de ejercicios y simulacros realizados (con escenarios y resultados)",
+            "Planes de mejora continua derivados de los ejercicios",
+            "Evidencia de validación de la coordinación inter-áreas durante los ejercicios",
+            "Evidencia de actualización de procedimientos a partir de lecciones aprendidas",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -746,6 +1099,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-9.1",
+        "norma": "A7777",
         "nombre": "Requisitos de seguridad para sistemas y aplicaciones",
         "descripcion": (
             "Las entidades deberán establecer un proceso para identificar, definir, documentar y gestionar "
@@ -758,9 +1112,17 @@ CONTROLES_BCRA = [
         "dominio": "S9",
         "referencia": "Com. A 7777 — Sección 9.1",
         "iso_mapping": ["A.8.25", "A.8.26", "A.8.27"],
+        "evidencia_requerida": [
+            "Política de requisitos de seguridad en el ciclo de vida del software",
+            "Plantillas o listas de verificación de requisitos de seguridad por tipo de proyecto",
+            "Documentación de requisitos de seguridad en proyectos de desarrollo recientes",
+            "Evidencia de modelado de amenazas (threat modeling) aplicado desde el diseño",
+            "Proceso de evaluación de seguridad en adquisición de software de terceros",
+        ],
     },
     {
         "id": "A7777-9.2",
+        "norma": "A7777",
         "nombre": "Gestión del ciclo de vida de software seguro (SSDLC)",
         "descripcion": (
             "Las entidades deberán establecer un proceso de gestión del ciclo de vida del software que "
@@ -775,6 +1137,15 @@ CONTROLES_BCRA = [
         "dominio": "S9",
         "referencia": "Com. A 7777 — Sección 9.2",
         "iso_mapping": ["A.8.25", "A.8.26", "A.8.27", "A.8.28", "A.8.29", "A.8.30"],
+        "evidencia_requerida": [
+            "Política o estándar de desarrollo seguro (SSDLC) documentado",
+            "Guías de codificación segura adoptadas (OWASP u otro estándar)",
+            "Informes de análisis SAST/DAST de aplicaciones críticas",
+            "Informes de pruebas de penetración de aplicaciones (pre-producción o periódicas)",
+            "Proceso de gestión de dependencias y componentes de terceros (SCA)",
+            "Evidencia de revisiones de código de seguridad",
+            "Estándares de informática forense aplicables a sistemas",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -783,6 +1154,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7777-10.1",
+        "norma": "A7777",
         "nombre": "Marco de gestión de la relación con terceras partes",
         "descripcion": (
             "Las entidades deberán establecer un marco de gestión de la relación con terceras partes que "
@@ -795,9 +1167,17 @@ CONTROLES_BCRA = [
         "dominio": "S10",
         "referencia": "Com. A 7777 — Sección 10.1",
         "iso_mapping": ["A.5.19", "A.5.20", "A.5.21"],
+        "evidencia_requerida": [
+            "Política de gestión de terceras partes aprobada",
+            "Registro de terceras partes críticas (con clasificación por nivel de riesgo)",
+            "Evaluaciones de riesgo realizadas por cada tercero crítico",
+            "Requisitos mínimos de seguridad definidos para terceras partes",
+            "Roles y responsabilidades documentados para la gestión de la relación con terceros",
+        ],
     },
     {
         "id": "A7777-10.2",
+        "norma": "A7777",
         "nombre": "Formalización de la relación con terceras partes",
         "descripcion": (
             "Las entidades deberán formalizar la relación con las terceras partes mediante contratos o acuerdos "
@@ -811,9 +1191,18 @@ CONTROLES_BCRA = [
         "dominio": "S10",
         "referencia": "Com. A 7777 — Sección 10.2",
         "iso_mapping": ["A.5.19", "A.5.20", "A.5.22"],
+        "evidencia_requerida": [
+            "Contratos con terceras partes críticas que incluyan cláusulas de seguridad de la información",
+            "SLAs formalizados con consecuencias ante incumplimiento",
+            "Cláusulas de derecho a auditoría incluidas en contratos",
+            "Requisitos de notificación de ciberincidentes en contratos",
+            "Planes de salida (exit plans) documentados para servicios críticos",
+            "Evidencia de que contratos cubren a sub-proveedores (supply chain)",
+        ],
     },
     {
         "id": "A7777-10.3",
+        "norma": "A7777",
         "nombre": "Control y monitoreo de terceras partes",
         "descripcion": (
             "Las entidades deberán definir e implementar un esquema de control y monitoreo continuo de los "
@@ -827,9 +1216,17 @@ CONTROLES_BCRA = [
         "dominio": "S10",
         "referencia": "Com. A 7777 — Sección 10.3",
         "iso_mapping": ["A.5.22", "A.5.23"],
+        "evidencia_requerida": [
+            "Registros de monitoreo de SLAs de terceras partes (con indicadores y resultados)",
+            "Informes de revisiones periódicas de cumplimiento de requisitos de seguridad de terceros",
+            "Registro de incumplimientos y gestión de deficiencias identificadas en terceros",
+            "Planes de contingencia ante interrupción de servicios de terceros críticos",
+            "Evidencia de evaluación de riesgos ante cambios en la prestación de terceros",
+        ],
     },
     {
         "id": "A7777-10.4",
+        "norma": "A7777",
         "nombre": "Informes de auditoría de terceras partes",
         "descripcion": (
             "Las entidades deberán asegurar que las terceras partes que prestan servicios críticos proporcionen "
@@ -842,6 +1239,13 @@ CONTROLES_BCRA = [
         "dominio": "S10",
         "referencia": "Com. A 7777 — Sección 10.4",
         "iso_mapping": ["A.5.20", "A.5.35", "A.5.36"],
+        "evidencia_requerida": [
+            "Informes de auditoría de terceras partes críticas (internos y/o externos: SOC 2, ISO 27001, PCI DSS)",
+            "Evidencia de análisis de los resultados de auditorías de terceros",
+            "Planes de mejora basados en hallazgos de auditorías de terceros",
+            "Periodicidad y alcance de informes de auditoría definidos por nivel de criticidad",
+            "Registro de seguimiento de planes de remediación de terceros",
+        ],
     },
 
     # ══════════════════════════════════════════════════════════════════════
@@ -850,6 +1254,7 @@ CONTROLES_BCRA = [
 
     {
         "id": "A7783-2",
+        "norma": "A7783",
         "nombre": "Gestión de riesgos de servicios financieros digitales",
         "descripcion": (
             "Los sujetos alcanzados deberán aplicar principios y prácticas para identificar, analizar y "
@@ -864,9 +1269,17 @@ CONTROLES_BCRA = [
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 2",
         "iso_mapping": ["A.5.7", "A.5.8"],
+        "evidencia_requerida": [
+            "Análisis de riesgos de servicios financieros digitales (actualizado)",
+            "Identificación documentada de riesgos de fraude interno y a clientes",
+            "Evaluación de riesgos de apertura de cuentas no presenciales",
+            "Análisis de riesgos por canal digital (home banking, app móvil, billetera, ATM)",
+            "Integración de riesgos digitales en el registro de riesgos integral",
+        ],
     },
     {
         "id": "A7783-3.1",
+        "norma": "A7783",
         "nombre": "Pautas para transacciones financieras digitales y acciones críticas",
         "descripcion": (
             "Los sujetos alcanzados deberán tener identificados y documentados los servicios digitales y la "
@@ -877,16 +1290,22 @@ CONTROLES_BCRA = [
             "digital del cliente en: creación/habilitación/rehabilitación de factores de autenticación; "
             "suscripción a nuevos productos o servicios; cambios de puntos de contacto o parámetros "
             "operacionales; agenda de cuentas de terceros para transferencias; confirmación de transacciones "
-            "que se desvíen de patrones predeterminados en sistemas de monitoreo transaccional. En servicios "
-            "de atención telefónica: deberán efectuar la devolución inmediata de montos ante desconocimiento "
-            "por parte del cliente."
+            "que se desvíen de patrones predeterminados en sistemas de monitoreo transaccional."
         ),
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 3.1",
         "iso_mapping": ["A.8.5", "A.5.17"],
+        "evidencia_requerida": [
+            "Inventario de servicios financieros digitales con funcionalidades documentadas",
+            "Política de autenticación para transacciones digitales (con niveles de riesgo)",
+            "Evidencia de MFA implementado para acciones críticas (con capturas o registros técnicos)",
+            "Procedimiento de devolución inmediata ante desconocimiento de operación en atención telefónica",
+            "Controles de transacciones implementados derivados del análisis de riesgos",
+        ],
     },
     {
         "id": "A7783-3.2",
+        "norma": "A7783",
         "nombre": "Seguridad de dispositivos y aplicaciones provistas por la organización",
         "descripcion": (
             "Los sujetos alcanzados deberán diseñar e implementar medidas de seguridad para los dispositivos "
@@ -905,9 +1324,18 @@ CONTROLES_BCRA = [
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 3.2",
         "iso_mapping": ["A.8.5", "A.8.9", "A.8.26"],
+        "evidencia_requerida": [
+            "Especificaciones de seguridad de la app móvil/home banking/billetera (cifrado, sesión, MDM)",
+            "Informes de pruebas de seguridad de aplicaciones (DAST/pentesting de app móvil y web)",
+            "Evidencia de controles anti-jailbreak/root en la app móvil",
+            "Documentación de medidas anti-skimming y anti-tamper en ATMs/kioscos",
+            "Registros de revisión/mantenimiento de dispositivos físicos (ATMs) ante manipulación",
+            "Evidencia de que datos de autenticación no se comparten en redirecciones a terceros",
+        ],
     },
     {
         "id": "A7783-3.3",
+        "norma": "A7783",
         "nombre": "Identificación digital de clientes (onboarding no presencial)",
         "descripcion": (
             "Cuando los sujetos alcanzados admitan la identificación de personas en forma digital y no "
@@ -924,9 +1352,18 @@ CONTROLES_BCRA = [
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 3.3",
         "iso_mapping": ["A.5.16", "A.8.5"],
+        "evidencia_requerida": [
+            "Documentación del proceso de onboarding digital (KYC digital) con controles por etapa",
+            "Evidencia de implementación de prueba de vida (liveness detection) en el proceso de alta",
+            "Evidencia de validación con organismos públicos (RENAPER u otro)",
+            "Procedimiento de borrado seguro de datos ante alta no concretada",
+            "Proceso de anonimización de datos estadísticos de altas no concretadas",
+            "Evidencia de validación del dispositivo móvil asociado al cliente",
+        ],
     },
     {
         "id": "A7783-3.4",
+        "norma": "A7783",
         "nombre": "Control de accesos y factores de autenticación en servicios digitales",
         "descripcion": (
             "Los valores de los identificadores de acceso no podrán incluir datos personales o públicos del "
@@ -944,9 +1381,18 @@ CONTROLES_BCRA = [
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 3.4",
         "iso_mapping": ["A.5.17", "A.8.5"],
+        "evidencia_requerida": [
+            "Configuración de política de contraseñas: mínimo 8 caracteres (mayúscula, minúscula, número, especial)",
+            "Evidencia de limitación de intentos fallidos de autenticación en canales digitales",
+            "Configuración de OTP: vigencia ≤ 120 segundos, longitud ≥ 6 dígitos",
+            "Evidencia de almacenamiento cifrado de factores de autenticación (no recuperables en texto plano)",
+            "Procedimiento de destrucción/desvinculación de factores no entregados en ≤ 30 días hábiles",
+            "Evidencia de que identificadores de acceso no contienen datos personales del cliente",
+        ],
     },
     {
         "id": "A7783-3.5",
+        "norma": "A7783",
         "nombre": "Capacitación y concientización en servicios financieros digitales",
         "descripcion": (
             "Los sujetos alcanzados deberán elaborar planes de capacitación y concientización específicos "
@@ -962,9 +1408,18 @@ CONTROLES_BCRA = [
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 3.5",
         "iso_mapping": ["A.6.3"],
+        "evidencia_requerida": [
+            "Plan de concientización en seguridad digital para clientes (aprobado y vigente)",
+            "Material publicado sobre puntos de contacto genuinos de la organización",
+            "Campañas de concientización sobre ingeniería social e intentos de fraude (evidencia de difusión)",
+            "Información disponible en la app/web sobre configuración de parámetros de seguridad",
+            "Procedimiento ante desconocimiento de operación publicado y accesible al cliente",
+            "Registros de acciones de concientización (email, notificaciones push, web, redes sociales)",
+        ],
     },
     {
         "id": "A7783-3.6",
+        "norma": "A7783",
         "nombre": "Vías de comunicación con clientes (canales 24x7)",
         "descripcion": (
             "Los sujetos alcanzados deberán proveer vías de comunicación disponibles las 24 horas a sus "
@@ -980,9 +1435,17 @@ CONTROLES_BCRA = [
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 3.6",
         "iso_mapping": ["A.5.26", "A.6.3"],
+        "evidencia_requerida": [
+            "Evidencia de canales de atención 24x7 disponibles para clientes (call center, chat, app)",
+            "Comprobante/número de seguimiento emitido al cliente ante cada comunicación",
+            "Evidencia de notificaciones automatizadas a clientes ante eventos de seguridad (alta/baja de factores, cambio de datos)",
+            "Registros de alertas de monitoreo transaccional comunicadas a clientes",
+            "Mecanismo de comunicación alternativa (SMS, email, push) con puntos de contacto validados",
+        ],
     },
     {
         "id": "A7783-4.1",
+        "norma": "A7783",
         "nombre": "Detección y análisis de eventos en servicios digitales",
         "descripcion": (
             "Los sujetos alcanzados deberán implementar mecanismos de detección y análisis de eventos "
@@ -995,9 +1458,17 @@ CONTROLES_BCRA = [
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 4.1",
         "iso_mapping": ["A.8.15", "A.8.16"],
+        "evidencia_requerida": [
+            "Evidencia de recolección de logs de accesos, autenticaciones y transacciones digitales",
+            "Reglas de correlación configuradas para detección de actividad sospechosa",
+            "Alertas configuradas ante desvíos de perfiles de comportamiento de clientes",
+            "Registros de detección de intentos de acceso no autorizados en canales digitales",
+            "Métricas de eventos de seguridad en servicios digitales (reportadas periódicamente)",
+        ],
     },
     {
         "id": "A7783-4.2",
+        "norma": "A7783",
         "nombre": "Monitoreo de la actividad y transacción del cliente",
         "descripcion": (
             "Los sujetos alcanzados deberán establecer y mantener sistemas de monitoreo de la actividad "
@@ -1011,5 +1482,12 @@ CONTROLES_BCRA = [
         "dominio": "S11",
         "referencia": "Com. A 7783 — Sección 4.2",
         "iso_mapping": ["A.8.16", "A.5.7"],
+        "evidencia_requerida": [
+            "Sistema de monitoreo transaccional implementado (documentación técnica y funcional)",
+            "Reglas de detección de fraude configuradas (con umbrales y criterios de disparo de MFA)",
+            "Registros de alertas generadas por monitoreo transaccional y su atención",
+            "Evidencia de actualización de reglas basada en resultados de gestión de ciberincidentes",
+            "Reportes de efectividad del sistema de monitoreo transaccional (tasa de detección, falsos positivos)",
+        ],
     },
 ]

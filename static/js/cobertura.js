@@ -1,11 +1,12 @@
 /* ── Módulo de Cobertura Multi-framework ────────────────────────────── */
 
 let coberturaActual = null;
-let fwActual = "BCRA";
+let fwActual = "A7777";
 
 const FW_INFO = {
-  BCRA: { nombre: "BCRA A 7777/7783", icono: "🏦", color: "#3b82f6" },
-  PCI:  { nombre: "PCI DSS v4.0",     icono: "💳", color: "#8b5cf6" },
+  A7777: { nombre: "BCRA A 7777",  icono: "🏦", color: "#3b82f6" },
+  A7783: { nombre: "BCRA A 7783",  icono: "🏦", color: "#0891b2" },
+  PCI:   { nombre: "PCI DSS v4.0", icono: "💳", color: "#8b5cf6" },
 };
 
 // ── Botón desde evaluación ──────────────────────────────────────────────
@@ -71,7 +72,6 @@ function madurezBarra(m, max = 5) {
 }
 
 function renderResumen(data) {
-  const doms = Object.values(data.dominios);
   const totalCtrl = data.controles.length;
   const conCobertura = data.controles.filter(c => c.madurez_estimada > 0).length;
   const pctCobertura = totalCtrl ? Math.round((conCobertura / totalCtrl) * 100) : 0;
@@ -142,11 +142,17 @@ function renderDominios(data) {
               <th>Control</th>
               <th>Referencia</th>
               <th>Madurez estimada</th>
-              <th>Controles ISO cubiertos</th>
+              <th>ISO cubiertos</th>
+              <th>Evidencia requerida</th>
             </tr>
           </thead>
           <tbody>
-            ${ctrls.map(c => `
+            ${ctrls.map(c => {
+              const evList = (c.evidencia_requerida || []);
+              const evHtml = evList.length
+                ? `<ul class="ev-req-list">${evList.map(e => `<li>${e}</li>`).join("")}</ul>`
+                : `<span class="ev-req-empty">—</span>`;
+              return `
             <tr class="${c.madurez_estimada === 0 ? 'cob-row-gap' : c.madurez_estimada < 2 ? 'cob-row-critica' : c.madurez_estimada < 3 ? 'cob-row-baja' : ''}">
               <td><span class="cob-ctrl-id">${c.id}</span></td>
               <td class="cob-ctrl-nombre">${c.nombre}</td>
@@ -156,7 +162,16 @@ function renderDominios(data) {
                 <span class="cob-iso-count">${c.controles_iso_cubiertos}/${c.controles_iso_total}</span>
                 <div class="cob-iso-tags">${c.iso_mapping.slice(0, 4).map(iso => `<span class="iso-tag">${iso}</span>`).join("")}${c.iso_mapping.length > 4 ? `<span class="iso-tag">+${c.iso_mapping.length - 4}</span>` : ""}</div>
               </td>
-            </tr>`).join("")}
+              <td class="ev-req-cell">
+                <button class="btn-ev-req" onclick="toggleEvReq('${c.id}', this)" title="Ver documentos requeridos">
+                  📋 Ver
+                </button>
+                <div id="evreq-${c.id}" class="ev-req-dropdown hidden">
+                  ${evHtml}
+                </div>
+              </td>
+            </tr>`;
+            }).join("")}
           </tbody>
         </table>
       </div>
@@ -170,4 +185,11 @@ function toggleDominioCob(domId) {
   if (!body) return;
   const open = body.classList.toggle("hidden");
   arrow.textContent = open ? "▸" : "▾";
+}
+
+function toggleEvReq(ctrlId, btn) {
+  const panel = document.getElementById(`evreq-${ctrlId}`);
+  if (!panel) return;
+  const isHidden = panel.classList.toggle("hidden");
+  btn.textContent = isHidden ? "📋 Ver" : "📋 Ocultar";
 }

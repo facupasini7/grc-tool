@@ -713,6 +713,54 @@ body {
   background: #eff6ff; color: #1d4ed8; font-weight: 600; white-space: nowrap;
 }
 
+/* ── Evidencia requerida ──────────────────────────────────────────── */
+.ev-req-cell { position: relative; white-space: nowrap; }
+
+.btn-ev-req {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+.btn-ev-req:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+.ev-req-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.14);
+  padding: 10px 14px;
+  min-width: 320px;
+  max-width: 420px;
+}
+
+.ev-req-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+.ev-req-list li {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 3px 0;
+  line-height: 1.4;
+  border-bottom: 1px dashed var(--border);
+}
+.ev-req-list li:last-child { border-bottom: none; }
+.ev-req-empty { font-size: 12px; color: var(--text-muted, #94a3b8); }
+
 /* ── Responsive ───────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .card-row { grid-template-columns: repeat(2, 1fr); }

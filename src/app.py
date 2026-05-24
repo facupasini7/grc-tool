@@ -11,10 +11,13 @@ from pathlib import Path
 
 from database import get_conn, init_db
 from data.controles_iso27001 import CONTROLES, DOMINIOS
-from data.controles_bcra import CONTROLES_BCRA, DOMINIOS_BCRA
+from data.controles_bcra import CONTROLES_BCRA, DOMINIOS_BCRA, DOMINIOS_A7777, DOMINIOS_A7783
 from data.controles_pci import CONTROLES_PCI, DOMINIOS_PCI
 from report import generar_pdf
 from ai_analyzer import analizar_evidencia
+
+CONTROLES_A7777 = [c for c in CONTROLES_BCRA if c.get("norma") == "A7777"]
+CONTROLES_A7783 = [c for c in CONTROLES_BCRA if c.get("norma") == "A7783"]
 
 BASE_DIR   = Path(__file__).parent.parent
 STATIC_DIR = BASE_DIR / "static"
@@ -83,9 +86,14 @@ def calcular_stats(evaluacion_id):
 
 
 def calcular_cobertura(evaluacion_id: int, framework: str):
-    """Calcula cobertura estimada de BCRA o PCI DSS basada en madurez ISO 27001."""
-    controles_fw = CONTROLES_BCRA if framework == "BCRA" else CONTROLES_PCI
-    dominios_fw  = DOMINIOS_BCRA  if framework == "BCRA" else DOMINIOS_PCI
+    """Calcula cobertura estimada de A7777, A7783, BCRA o PCI DSS basada en madurez ISO 27001."""
+    fw_map = {
+        "A7777": (CONTROLES_A7777, DOMINIOS_A7777),
+        "A7783": (CONTROLES_A7783, DOMINIOS_A7783),
+        "BCRA":  (CONTROLES_BCRA,  DOMINIOS_BCRA),
+        "PCI":   (CONTROLES_PCI,   DOMINIOS_PCI),
+    }
+    controles_fw, dominios_fw = fw_map[framework]
 
     with get_conn() as conn:
         filas = conn.execute(
@@ -117,6 +125,7 @@ def calcular_cobertura(evaluacion_id: int, framework: str):
             "madurez_estimada": madurez_est,
             "controles_iso_cubiertos": cubierto,
             "controles_iso_total": total_mapped,
+            "evidencia_requerida": ctrl.get("evidencia_requerida", []),
         })
 
         dom = ctrl["dominio"]
@@ -243,6 +252,18 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/frameworks/bcra/dominios":
             self.send_json(DOMINIOS_BCRA)
 
+        elif path == "/api/frameworks/a7777/controles":
+            self.send_json(CONTROLES_A7777)
+
+        elif path == "/api/frameworks/a7777/dominios":
+            self.send_json(DOMINIOS_A7777)
+
+        elif path == "/api/frameworks/a7783/controles":
+            self.send_json(CONTROLES_A7783)
+
+        elif path == "/api/frameworks/a7783/dominios":
+            self.send_json(DOMINIOS_A7783)
+
         elif path == "/api/frameworks/pci/controles":
             self.send_json(CONTROLES_PCI)
 
@@ -253,7 +274,7 @@ class Handler(BaseHTTPRequestHandler):
             parts = path.split("/")
             eid = int(parts[3])
             fw = parts[5].upper()
-            if fw not in ("BCRA", "PCI"):
+            if fw not in ("A7777", "A7783", "BCRA", "PCI"):
                 self.send_json({"error": "framework no soportado"}, 400)
                 return
             self.send_json(calcular_cobertura(eid, fw))
