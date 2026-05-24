@@ -1,13 +1,18 @@
-/* ── ISO 27001 Gap Analysis — frontend ──────────────────────────── */
+/* ── GRC Tool — frontend ─────────────────────────────────────────── */
 
 const API = "";
-let evalActual = null;
-let controles = [];
-let dominios = {};
-let respuestas = {};
+let evalActual  = null;
+let controles   = [];
+let dominios    = {};
+let respuestas  = {};
 let dominioActivo = null;
-let chartRadar = null;
-let chartBar = null;
+let chartRadar  = null;
+let chartBar    = null;
+
+// Copia de los controles ISO 27001 para restaurar al cambiar evaluación
+let _iso27001Controles = [];
+let _iso27001Dominios  = {};
+let usuarioActual = null;
 
 const MADUREZ_LABELS = ["Inexistente","Inicial","Repetible","Definido","Gestionado","Optimizado"];
 
@@ -26,14 +31,45 @@ function showView(name) {
   document.querySelector(`[data-view="${name}"]`).classList.add("active");
 }
 
-// ── Init ──────────────────────────────────────────────────────────
+// ── Auth check + Init ─────────────────────────────────────────────
 async function init() {
-  [controles, dominios] = await Promise.all([
+  // Verificar sesión activa
+  const meResp = await fetch(`${API}/api/me`);
+  if (meResp.status === 401) {
+    window.location.href = "/login";
+    return;
+  }
+  usuarioActual = await meResp.json();
+
+  // Mostrar info de usuario en sidebar
+  const el = document.getElementById("sidebar-username");
+  const rl = document.getElementById("sidebar-role");
+  if (el) el.textContent = usuarioActual.nombre || usuarioActual.username;
+  if (rl) rl.textContent = usuarioActual.rol;
+
+  // Ocultar "Auditoría" para roles no admin
+  if (usuarioActual.rol !== "admin") {
+    const navAudit = document.querySelector('[data-view="auditoria"]');
+    if (navAudit) navAudit.style.display = "none";
+  }
+
+  // Cargar controles ISO 27001 base
+  [_iso27001Controles, _iso27001Dominios] = await Promise.all([
     fetch(`${API}/api/controles`).then(r => r.json()),
     fetch(`${API}/api/dominios`).then(r => r.json()),
   ]);
+  controles = _iso27001Controles;
+  dominios  = _iso27001Dominios;
+
   await cargarEvaluaciones();
 }
+
+async function logout() {
+  await fetch(`${API}/api/logout`, { method: "POST" });
+  window.location.href = "/login";
+}
+
+document.getElementById("btn-logout").addEventListener("click", logout);
 
 // ── Home: lista de evaluaciones ───────────────────────────────────
 async function cargarEvaluaciones() {
@@ -139,15 +175,32 @@ async function abrirEval(id, e) {
   evalActual = evals.find(ev => ev.id === id);
   if (!evalActual) return;
 
+  evalActual._frameworks = parseFws(evalActual.frameworks);
+
+  // ── Fix framework mapping: cargar los controles del framework activo ──
+  // Si tiene ISO27001, evaluar siempre con ISO27001 (es la base de cobertura)
+  // Si solo tiene normas BCRA/PCI, cargar los controles de esa norma directamente
+  if (evalActual._frameworks.includes("ISO27001")) {
+    controles = _iso27001Controles;
+    dominios  = _iso27001Dominios;
+  } else {
+    const fw = evalActual._frameworks[0];
+    const fwPath = { A7777: "a7777", A7783: "a7783", PCI: "pci" }[fw];
+    if (fwPath) {
+      [controles, dominios] = await Promise.all([
+        fetch(`${API}/api/frameworks/${fwPath}/controles`).then(r => r.json()),
+        fetch(`${API}/api/frameworks/${fwPath}/dominios`).then(r => r.json()),
+      ]);
+    }
+  }
+
   const rows = await fetch(`${API}/api/evaluaciones/${id}/respuestas`).then(r => r.json());
   respuestas = {};
   rows.forEach(r => { respuestas[r.control_id] = r; });
 
-  // Parsear frameworks para que cobertura.js los pueda leer
-  evalActual._frameworks = parseFws(evalActual.frameworks);
-
   document.getElementById("eval-titulo").textContent = evalActual.nombre;
   document.getElementById("eval-empresa").textContent = evalActual.empresa;
+  dominioActivo = null;
   renderTabs();
   actualizarProgreso();
   showView("evaluacion");
@@ -414,6 +467,11 @@ function renderTablaBrechas(stats) {
 // ── PDF ───────────────────────────────────────────────────────────
 document.getElementById("btn-pdf").addEventListener("click", () => descargarPDF());
 document.getElementById("btn-pdf-stats").addEventListener("click", () => descargarPDF());
+document.getElementById("btn-ver-remediacion").addEventListener("click", () => {
+  if (!evalActual) return;
+  cargarRemediacion();
+});
+document.getElementById("btn-back-eval-rem").addEventListener("click", () => showView("evaluacion"));
 
 function descargarPDF() {
   if (!evalActual) return;

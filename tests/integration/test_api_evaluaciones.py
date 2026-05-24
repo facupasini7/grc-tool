@@ -29,14 +29,19 @@ sys.path.insert(0, str(ROOT / "src"))
 
 @pytest.fixture(scope="function")
 def server(tmp_path, monkeypatch):
-    """Levanta una instancia real del servidor en un puerto libre."""
+    """Levanta una instancia real del servidor en un puerto libre.
+
+    GRC_AUTH=0 desactiva la autenticación para que los tests puedan
+    llamar a todos los endpoints sin necesidad de cookie de sesión.
+    """
     import database
+    monkeypatch.setenv("GRC_AUTH", "0")          # deshabilitar auth en tests
     db_file = tmp_path / "test_api.db"
     monkeypatch.setattr(database, "DB_PATH", db_file)
     database.init_db()
 
     from app import Handler, ThreadingServer
-    srv = ThreadingServer(("127.0.0.1", 0), Handler)   # puerto 0 = asignado por el SO
+    srv = ThreadingServer(("127.0.0.1", 0), Handler)
     port = srv.server_address[1]
     thread = threading.Thread(target=srv.serve_forever, daemon=True)
     thread.start()

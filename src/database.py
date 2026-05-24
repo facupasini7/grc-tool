@@ -15,6 +15,36 @@ def get_conn():
 def init_db():
     with get_conn() as conn:
         conn.executescript("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                username      TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                nombre        TEXT DEFAULT '',
+                rol           TEXT DEFAULT 'auditor',
+                activo        INTEGER DEFAULT 1,
+                creado_en     TEXT DEFAULT (datetime('now')),
+                ultimo_login  TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS sesiones (
+                token      TEXT PRIMARY KEY,
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                expira_en  TEXT NOT NULL,
+                creada_en  TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp      TEXT DEFAULT (datetime('now')),
+                usuario_id     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+                usuario_nombre TEXT DEFAULT '',
+                accion         TEXT NOT NULL,
+                entidad        TEXT DEFAULT '',
+                entidad_id     TEXT DEFAULT '',
+                detalle        TEXT DEFAULT '',
+                ip             TEXT DEFAULT ''
+            );
+
             CREATE TABLE IF NOT EXISTS evaluaciones (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre      TEXT NOT NULL,

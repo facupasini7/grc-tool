@@ -836,10 +836,355 @@ body {
 .ev-req-list li:last-child { border-bottom: none; }
 .ev-req-empty { font-size: 12px; color: var(--text-muted, #94a3b8); }
 
+/* ── Sidebar: usuario autenticado ─────────────────────────────────── */
+.sidebar-user {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255,255,255,.1);
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.user-info-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+.user-avatar-icon {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.user-display-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-display-role {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.btn-logout {
+  width: 100%;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.btn-logout:hover { background: rgba(255,255,255,.08); color: #e2e8f0; }
+
+/* ── Login page ───────────────────────────────────────────────────── */
+.login-body {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--primary) 0%, #0f3460 60%, #16213e 100%);
+}
+.login-wrap {
+  width: 100%;
+  max-width: 420px;
+  padding: 24px 16px;
+}
+.login-brand {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.login-brand-icon { font-size: 48px; display: block; margin-bottom: 12px; }
+.login-brand-name {
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 6px;
+}
+.login-brand-sub {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.login-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.35);
+}
+.login-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 24px;
+}
+.login-field {
+  margin-bottom: 16px;
+}
+.login-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 6px;
+}
+.login-field input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.login-field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,70,229,.12);
+}
+.login-error {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.btn-login {
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
+  margin-top: 4px;
+  justify-content: center;
+}
+.login-hint {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.login-hint-label { font-weight: 600; }
+.login-hint-creds code {
+  background: var(--surface2);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* ── Audit Log ────────────────────────────────────────────────────── */
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+.audit-table th {
+  background: var(--primary);
+  color: #fff;
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+.audit-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.audit-table tr:last-child td { border-bottom: none; }
+.audit-table tr:hover td { background: var(--surface2); }
+
+.audit-accion {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.audit-login        { background: #dbeafe; color: #1d4ed8; }
+.audit-login_fallido{ background: #fee2e2; color: #dc2626; }
+.audit-logout       { background: #f1f5f9; color: #64748b; }
+.audit-crear        { background: #dcfce7; color: #15803d; }
+.audit-eliminar     { background: #fee2e2; color: #dc2626; }
+.audit-subir        { background: #e0e7ff; color: #4338ca; }
+.audit-analizar     { background: #f3e8ff; color: #7c3aed; }
+.audit-cambiar      { background: #fef3c7; color: #b45309; }
+.audit-default      { background: var(--surface2); color: var(--text-muted); }
+
+.audit-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.audit-counter {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* ── Kanban — Plan de Remediación ────────────────────────────────── */
+.rem-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.rem-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+.rem-stat-val { font-size: 26px; font-weight: 800; color: var(--primary); line-height: 1; margin-bottom: 4px; }
+.rem-stat-lbl { font-size: 11px; color: var(--text-muted); }
+.rem-stat-red .rem-stat-val { color: var(--danger); }
+
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.kanban-col {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  min-height: 200px;
+}
+.kanban-col-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--border);
+}
+.kanban-col-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  flex: 1;
+}
+.kanban-col-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--border);
+  color: var(--text-muted);
+}
+.kanban-col-abierto   .kanban-col-header { border-color: #fca5a5; }
+.kanban-col-abierto   .kanban-col-count  { background: #fee2e2; color: #dc2626; }
+.kanban-col-enproceso .kanban-col-header { border-color: #fcd34d; }
+.kanban-col-enproceso .kanban-col-count  { background: #fef3c7; color: #d97706; }
+.kanban-col-cerrado   .kanban-col-header { border-color: #86efac; }
+.kanban-col-cerrado   .kanban-col-count  { background: #dcfce7; color: #16a34a; }
+
+.kanban-cards { display: flex; flex-direction: column; gap: 10px; }
+
+.kanban-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  transition: box-shadow .15s, transform .1s;
+}
+.kanban-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.12); transform: translateY(-1px); }
+.kanban-card.sev-critica { border-left: 4px solid #dc2626; }
+.kanban-card.sev-alta    { border-left: 4px solid #ea580c; }
+.kanban-card.sev-media   { border-left: 4px solid #d97706; }
+.kanban-card.sev-baja    { border-left: 4px solid #16a34a; }
+
+.kanban-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.kanban-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+.kanban-card-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.kanban-footer-item { display: flex; align-items: center; gap: 4px; }
+.kanban-date-vencida { color: var(--danger); font-weight: 700; }
+
+.kanban-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.btn-kanban {
+  padding: 4px 11px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-kanban-avanzar { border-color: var(--accent); color: var(--accent); }
+.btn-kanban-avanzar:hover { background: var(--accent); color: #fff; }
+.btn-kanban-reabrir { border-color: #d97706; color: #d97706; }
+.btn-kanban-reabrir:hover { background: #d97706; color: #fff; }
+
+.kanban-empty {
+  text-align: center;
+  padding: 24px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.kanban-empty-icon { font-size: 28px; margin-bottom: 8px; }
+
+.rem-empty-state {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 60px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
 /* ── Responsive ───────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .card-row { grid-template-columns: repeat(2, 1fr); }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .charts-row { grid-template-columns: 1fr; }
   .cob-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .kanban-board { grid-template-columns: 1fr; }
+  .rem-stats-bar { grid-template-columns: repeat(2, 1fr); }
 }

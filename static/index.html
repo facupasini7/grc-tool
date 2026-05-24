@@ -20,9 +20,18 @@
     <a href="#" class="nav-item" data-view="stats"><span class="nav-icon">📊</span> Resultados</a>
     <a href="#" class="nav-item" data-view="hallazgos"><span class="nav-icon">⚠️</span> Hallazgos</a>
     <a href="#" class="nav-item" data-view="cobertura"><span class="nav-icon">🗺️</span> Cobertura</a>
+    <a href="#" class="nav-item" data-view="remediacion"><span class="nav-icon">📌</span> Remediación</a>
+    <a href="#" class="nav-item" data-view="auditoria"><span class="nav-icon">🕵️</span> Auditoría</a>
   </nav>
-  <div class="sidebar-footer">
-    <small>ISO/IEC 27001:2022<br>93 controles · 4 dominios</small>
+  <div class="sidebar-user">
+    <div class="user-info-row">
+      <div class="user-avatar-icon">👤</div>
+      <div>
+        <div class="user-display-name" id="sidebar-username">—</div>
+        <div class="user-display-role" id="sidebar-role">—</div>
+      </div>
+    </div>
+    <button class="btn-logout" id="btn-logout">↩ Cerrar sesión</button>
   </div>
 </aside>
 
@@ -59,22 +68,18 @@
           <div class="fw-modal-card selected" data-fw="ISO27001">
             <span class="fw-modal-icon">📋</span>
             <span class="fw-modal-name">ISO 27001:2022</span>
-            <span class="fw-modal-tag fw-modal-tag-opt">Opcional</span>
           </div>
           <div class="fw-modal-card" data-fw="A7777">
             <span class="fw-modal-icon">🏦</span>
             <span class="fw-modal-name">BCRA A 7777</span>
-            <span class="fw-modal-tag fw-modal-tag-opt">Opcional</span>
           </div>
           <div class="fw-modal-card" data-fw="A7783">
             <span class="fw-modal-icon">🏦</span>
             <span class="fw-modal-name">BCRA A 7783</span>
-            <span class="fw-modal-tag fw-modal-tag-opt">Opcional</span>
           </div>
           <div class="fw-modal-card" data-fw="PCI">
             <span class="fw-modal-icon">💳</span>
             <span class="fw-modal-name">PCI DSS v4.0</span>
-            <span class="fw-modal-tag fw-modal-tag-opt">Opcional</span>
           </div>
         </div>
         <p class="fw-modal-hint">Seleccioná los frameworks que forman parte del alcance de la auditoría. Al menos uno debe estar seleccionado.</p>
@@ -99,6 +104,7 @@
         <button class="btn btn-success" id="btn-ver-stats">Ver resultados</button>
         <button class="btn btn-warning" id="btn-ver-hallazgos">⚠️ Hallazgos</button>
         <button class="btn btn-info" id="btn-ver-cobertura">🗺️ Cobertura</button>
+        <button class="btn btn-secondary" id="btn-ver-remediacion">📌 Remediación</button>
         <button class="btn btn-outline" id="btn-pdf">📄 PDF</button>
       </div>
     </div>
@@ -205,6 +211,50 @@
     </div>
   </div>
 
+  <!-- ── Plan de Remediación (Kanban) ─────────────────────────────────── -->
+  <div id="view-remediacion" class="view">
+    <div class="page-header row-between">
+      <div>
+        <h1>Plan de Remediación</h1>
+        <p class="subtitle" id="remediacion-empresa">Abrí una evaluación para ver el plan de remediación.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="btn-back-eval-rem">← Evaluación</button>
+      </div>
+    </div>
+    <div id="rem-stats" class="rem-stats-bar"></div>
+    <div id="kanban-board" class="kanban-board"></div>
+  </div>
+
+  <!-- ── Auditoría ─────────────────────────────────────────────────────── -->
+  <div id="view-auditoria" class="view">
+    <div class="page-header row-between">
+      <div>
+        <h1>Log de Auditoría</h1>
+        <p class="subtitle">Registro inmutable de todas las acciones realizadas en el sistema.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="btn-refresh-audit">🔄 Actualizar</button>
+      </div>
+    </div>
+    <div class="audit-filters">
+      <select id="audit-filtro-accion" class="filtro-select">
+        <option value="">Todas las acciones</option>
+        <option value="login">Login</option>
+        <option value="login_fallido">Login fallido</option>
+        <option value="logout">Logout</option>
+        <option value="crear_evaluacion">Crear evaluación</option>
+        <option value="eliminar_evaluacion">Eliminar evaluación</option>
+        <option value="crear_hallazgo">Crear hallazgo</option>
+        <option value="subir_evidencia">Subir evidencia</option>
+        <option value="analizar_ia">Analizar con IA</option>
+        <option value="cambiar_estado_hallazgo">Cambiar estado hallazgo</option>
+      </select>
+      <span class="audit-counter" id="audit-counter">—</span>
+    </div>
+    <div id="audit-log-tabla"></div>
+  </div>
+
 </main>
 
 <!-- Modal Hallazgo -->
@@ -293,5 +343,7 @@
 <script src="/static/js/hallazgos.js"></script>
 <script src="/static/js/evidencias.js"></script>
 <script src="/static/js/cobertura.js"></script>
+<script src="/static/js/remediacion.js"></script>
+<script src="/static/js/auditlog.js"></script>
 </body>
 </html>
