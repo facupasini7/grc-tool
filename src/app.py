@@ -314,10 +314,15 @@ class Handler(BaseHTTPRequestHandler):
 
         # Crear evaluación
         if path == "/api/evaluaciones":
+            import json as _json
+            fws = body.get("frameworks", ["ISO27001"])
+            if "ISO27001" not in fws:
+                fws = ["ISO27001"] + fws
             with get_conn() as conn:
                 cur = conn.execute(
-                    "INSERT INTO evaluaciones (nombre, empresa, alcance) VALUES (?,?,?)",
-                    (body.get("nombre", "Sin nombre"), body.get("empresa", ""), body.get("alcance", "")),
+                    "INSERT INTO evaluaciones (nombre, empresa, alcance, frameworks) VALUES (?,?,?,?)",
+                    (body.get("nombre", "Sin nombre"), body.get("empresa", ""),
+                     body.get("alcance", ""), _json.dumps(fws, ensure_ascii=False)),
                 )
             self.send_json({"id": cur.lastrowid})
 

@@ -16,8 +16,38 @@ document.getElementById("btn-ver-cobertura").addEventListener("click", () => {
   document.getElementById("cobertura-sin-eval").classList.add("hidden");
   document.getElementById("cobertura-contenido").classList.remove("hidden");
   showView("cobertura");
+  renderFrameworkButtons();
+  // Seleccionar el primer framework disponible (no ISO27001)
+  const disponibles = fwsDisponibles();
+  const primero = disponibles[0] || "A7777";
+  fwActual = primero;
   cargarCobertura(fwActual);
 });
+
+function fwsDisponibles() {
+  const fws = evalActual?._frameworks || ["ISO27001", "A7777", "A7783", "PCI"];
+  return Object.keys(FW_INFO).filter(fw => fws.includes(fw));
+}
+
+function renderFrameworkButtons() {
+  const disponibles = fwsDisponibles();
+  const sel = document.querySelector(".fw-selector");
+  if (!sel) return;
+
+  if (disponibles.length === 0) {
+    sel.innerHTML = `<span style="color:var(--text-secondary);font-size:13px;">
+      Esta evaluación no incluye frameworks adicionales.</span>`;
+    return;
+  }
+
+  sel.innerHTML = disponibles.map(fw => {
+    const info = FW_INFO[fw];
+    return `<button class="btn btn-fw${fw === fwActual ? " active" : ""}"
+      data-fw="${fw}" onclick="seleccionarFramework('${fw}')">
+      ${info.icono} ${info.nombre}
+    </button>`;
+  }).join("");
+}
 
 document.getElementById("btn-back-eval-cob").addEventListener("click", () => showView("evaluacion"));
 
@@ -44,6 +74,7 @@ async function cargarCobertura(fw) {
 }
 
 function seleccionarFramework(fw) {
+  fwActual = fw;
   document.querySelectorAll(".btn-fw").forEach(b => b.classList.toggle("active", b.dataset.fw === fw));
   cargarCobertura(fw);
 }

@@ -20,6 +20,7 @@ def init_db():
                 nombre      TEXT NOT NULL,
                 empresa     TEXT NOT NULL,
                 alcance     TEXT,
+                frameworks  TEXT DEFAULT '["ISO27001"]',
                 creada_en   TEXT DEFAULT (datetime('now')),
                 actualizada TEXT DEFAULT (datetime('now')),
                 completada  INTEGER DEFAULT 0
@@ -68,3 +69,8 @@ def init_db():
                 actualizado_en      TEXT DEFAULT (datetime('now'))
             );
         """)
+        # Migración: agregar columna frameworks si no existe (DBs anteriores)
+        try:
+            conn.execute("ALTER TABLE evaluaciones ADD COLUMN frameworks TEXT DEFAULT '[\"ISO27001\"]'")
+        except Exception:
+            pass  # ya existe

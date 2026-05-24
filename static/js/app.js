@@ -50,18 +50,28 @@ async function cargarEvaluaciones() {
     return;
   }
 
-  cont.innerHTML = `<div class="eval-list">${evs.map(e => `
+  const FW_LABELS = { ISO27001: "ISO 27001", A7777: "BCRA A 7777", A7783: "BCRA A 7783", PCI: "PCI DSS" };
+  const FW_ICONS  = { ISO27001: "📋", A7777: "🏦", A7783: "🏦", PCI: "💳" };
+
+  cont.innerHTML = `<div class="eval-list">${evs.map(e => {
+    const fws = parseFws(e.frameworks);
+    const badges = fws.map(fw =>
+      `<span class="eval-fw-badge">${FW_ICONS[fw] || "📋"} ${FW_LABELS[fw] || fw}</span>`
+    ).join("");
+    return `
     <div class="eval-item" data-id="${e.id}">
       <div class="eval-info">
         <div class="eval-nombre">${e.nombre}</div>
         <div class="eval-meta">${e.empresa} · Actualizada: ${fmtDate(e.actualizada)}</div>
+        <div class="eval-fw-badges">${badges}</div>
       </div>
       <div class="eval-actions">
         <button class="btn btn-primary btn-sm" onclick="abrirEval(${e.id}, event)">Continuar</button>
         <button class="btn btn-outline btn-sm" onclick="verStats(${e.id}, event)">Resultados</button>
         <button class="btn btn-danger btn-sm" onclick="eliminarEval(${e.id}, event)">🗑</button>
       </div>
-    </div>`).join("")}</div>`;
+    </div>`;
+  }).join("")}</div>`;
 }
 
 function fmtDate(iso) {
@@ -70,8 +80,22 @@ function fmtDate(iso) {
   return d.toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric" });
 }
 
+function parseFws(raw) {
+  try { return JSON.parse(raw || '["ISO27001"]'); }
+  catch { return ["ISO27001"]; }
+}
+
 // ── Nueva evaluación ──────────────────────────────────────────────
+// Framework cards en el modal
+document.getElementById("fw-modal-grid").addEventListener("click", e => {
+  const card = e.target.closest(".fw-modal-card");
+  if (!card || card.classList.contains("locked")) return;
+  card.classList.toggle("selected");
+});
+
 document.getElementById("btn-nueva").addEventListener("click", () => {
+  // Resetear cards (deseleccionar todas excepto ISO27001)
+  document.querySelectorAll(".fw-modal-card:not(.locked)").forEach(c => c.classList.remove("selected"));
   document.getElementById("modal-nueva").classList.remove("hidden");
 });
 document.getElementById("btn-cancelar-modal").addEventListener("click", () => {
@@ -83,10 +107,17 @@ document.getElementById("btn-crear").addEventListener("click", async () => {
   const empresa = document.getElementById("inp-empresa").value.trim();
   const alcance = document.getElementById("inp-alcance").value.trim();
   if (!nombre || !empresa) { alert("Nombre y empresa son requeridos."); return; }
+
+  // Recoger frameworks seleccionados
+  const frameworks = ["ISO27001"];
+  document.querySelectorAll(".fw-modal-card.selected:not(.locked)").forEach(c => {
+    frameworks.push(c.dataset.fw);
+  });
+
   const { id } = await fetch(`${API}/api/evaluaciones`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nombre, empresa, alcance }),
+    body: JSON.stringify({ nombre, empresa, alcance, frameworks }),
   }).then(r => r.json());
   document.getElementById("modal-nueva").classList.add("hidden");
   document.getElementById("inp-nombre").value = "";
@@ -106,6 +137,9 @@ async function abrirEval(id, e) {
   const rows = await fetch(`${API}/api/evaluaciones/${id}/respuestas`).then(r => r.json());
   respuestas = {};
   rows.forEach(r => { respuestas[r.control_id] = r; });
+
+  // Parsear frameworks para que cobertura.js los pueda leer
+  evalActual._frameworks = parseFws(evalActual.frameworks);
 
   document.getElementById("eval-titulo").textContent = evalActual.nombre;
   document.getElementById("eval-empresa").textContent = evalActual.empresa;
