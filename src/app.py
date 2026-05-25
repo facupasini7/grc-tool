@@ -447,6 +447,18 @@ class Handler(BaseHTTPRequestHandler):
                 ).fetchall()
             self.send_json([dict(r) for r in rows])
 
+        elif path == "/api/participantes":
+            # Lista liviana de usuarios para asignar a evaluaciones — admin y analista
+            if user.get("rol") not in ("admin", "analista"):
+                self.send_json({"error": "Sin acceso."}, 403)
+                return
+            with get_conn() as conn:
+                rows = conn.execute(
+                    "SELECT id, username, nombre, rol FROM usuarios "
+                    "WHERE activo = 1 AND aprobado = 1 ORDER BY nombre"
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
         elif path == "/api/evaluaciones":
             with get_conn() as conn:
                 if user.get("rol") == "auditado" and user.get("id"):
@@ -502,7 +514,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json([dict(r) for r in rows])
 
         elif path.startswith("/api/evaluaciones/") and path.endswith("/asignados"):
-            if not self._require_admin(user): return
+            if user.get("rol") not in ("admin", "analista"):
+                self.send_json({"error": "Sin acceso."}, 403); return
             eid = int(path.split("/")[3])
             with get_conn() as conn:
                 rows = conn.execute(

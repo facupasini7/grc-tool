@@ -120,6 +120,20 @@ def init_db():
     _migrate()
 
 
+def _check_is_default_password(stored: str) -> bool:
+    """Verifica si el hash corresponde a 'Admin1234!' sin importar auth (evita circular)."""
+    import hashlib
+    try:
+        parts = stored.split(":")
+        if len(parts) != 5 or parts[0] != "pbkdf2":
+            return False
+        _, alg, iters, salt, stored_hex = parts
+        dk = hashlib.pbkdf2_hmac(alg, b"Admin1234!", salt.encode(), int(iters))
+        return dk.hex() == stored_hex
+    except Exception:
+        return False
+
+
 def _migrate():
     migrations = [
         "ALTER TABLE evaluaciones ADD COLUMN frameworks TEXT DEFAULT '[\"ISO27001\"]'",
@@ -133,3 +147,13 @@ def _migrate():
                 conn.execute(sql)
             except Exception:
                 pass  # columna ya existe
+
+        # Si el admin aún tiene la contraseña por defecto y no tiene el flag,
+        # activarlo para que se le pida el cambio en el próximo login.
+        row = conn.execute(
+            "SELECT password_hash FROM usuarios WHERE username = 'admin' AND debe_cambiar_password = 0"
+        ).fetchone()
+        if row and _check_is_default_password(row["password_hash"]):
+            conn.execute(
+                "UPDATE usuarios SET debe_cambiar_password = 1 WHERE username = 'admin'"
+            )

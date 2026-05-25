@@ -196,6 +196,8 @@ document.getElementById("btn-nueva").addEventListener("click", () => {
   document.querySelectorAll(".fw-modal-card").forEach(c => c.classList.remove("selected"));
   document.querySelector('.fw-modal-card[data-fw="ISO27001"]').classList.add("selected");
   document.getElementById("modal-nueva").classList.remove("hidden");
+  // Cargar usuarios disponibles para asignar
+  _cargarParticipantesModal("modal-participantes-lista");
 });
 document.getElementById("btn-cancelar-modal").addEventListener("click", () => {
   document.getElementById("modal-nueva").classList.add("hidden");
@@ -222,6 +224,17 @@ document.getElementById("btn-crear").addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ nombre, empresa, alcance, frameworks }),
   }).then(r => r.json());
+
+  // Asignar participantes seleccionados en el modal
+  const checks = document.querySelectorAll("#modal-participantes-lista .chk-participante:checked");
+  for (const chk of checks) {
+    await fetch(`${API}/api/evaluaciones/${id}/asignados`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario_id: parseInt(chk.value) }),
+    }).catch(() => {});
+  }
+
   document.getElementById("modal-nueva").classList.add("hidden");
   document.getElementById("inp-nombre").value = "";
   document.getElementById("inp-empresa").value = "";
@@ -273,8 +286,9 @@ function renderTabs() {
   const bar = document.getElementById("tab-bar");
   bar.innerHTML = Object.entries(dominios).map(([id, nombre]) => {
     const total = controles.filter(c => c.dominio === id).length;
-    const resp = controles.filter(c => c.dominio === id && respuestas[c.id]?.madurez > 0).length;
-    return `<button class="tab ${dominioActivo === id ? "active" : ""}" data-dom="${id}">
+    const resp  = controles.filter(c => c.dominio === id && respuestas[c.id]?.madurez > 0).length;
+    const pct   = total > 0 ? resp / total : 0;
+    return `<button class="tab ${dominioActivo === id ? "active" : ""}" data-dom="${id}" style="--tab-progress:${pct}">
       ${id}<br><span class="tab-count">${nombre.split(" ").at(-1)} · ${resp}/${total}</span>
     </button>`;
   }).join("");
@@ -553,6 +567,91 @@ async function eliminarEval(id, e) {
   if (evalActual?.id === id) evalActual = null;
   await cargarEvaluaciones();
 }
+
+// ── Participantes ─────────────────────────────────────────────────
+async function _cargarParticipantesModal(listaId, evalId = null) {
+  const lista = document.getElementById(listaId);
+  if (!lista) return;
+  lista.innerHTML = `<div class="participantes-loading">Cargando…</div>`;
+
+  try {
+    const [users, asignados] = await Promise.all([
+      fetch(`${API}/api/participantes`).then(r => r.ok ? r.json() : []),
+      evalId
+        ? fetch(`${API}/api/evaluaciones/${evalId}/asignados`).then(r => r.ok ? r.json() : [])
+        : Promise.resolve([]),
+    ]);
+
+    if (!users.length) {
+      lista.innerHTML = `<div class="participantes-empty">No hay usuarios disponibles.</div>`;
+      return;
+    }
+
+    const asignadosIds = new Set((asignados || []).map(u => u.id));
+    lista.innerHTML = users.map(u => `
+      <label class="participante-item">
+        <input type="checkbox" class="chk-participante" value="${u.id}"
+          ${asignadosIds.has(u.id) ? "checked" : ""} />
+        <span class="participante-nombre">${u.nombre || u.username}</span>
+        <span class="participante-rol-chip role-${u.rol === 'admin' ? 'admin' : u.rol === 'analista' ? 'analista' : u.rol === 'auditor_externo' ? 'externo' : 'auditado'}">
+          ${ROL_LABELS[u.rol] || u.rol}
+        </span>
+      </label>`).join("");
+  } catch {
+    lista.innerHTML = `<div class="participantes-empty">Error al cargar usuarios.</div>`;
+  }
+}
+
+// Botón participantes en el header de evaluación
+document.getElementById("btn-participantes").addEventListener("click", async () => {
+  if (!evalActual) return;
+  const modal = document.getElementById("modal-participantes");
+  modal.classList.remove("hidden");
+  await _cargarParticipantesModal("participantes-lista", evalActual.id);
+});
+
+document.getElementById("btn-cancel-participantes").addEventListener("click", () => {
+  document.getElementById("modal-participantes").classList.add("hidden");
+});
+
+document.getElementById("btn-save-participantes").addEventListener("click", async () => {
+  if (!evalActual) return;
+  const btn = document.getElementById("btn-save-participantes");
+  btn.disabled = true; btn.textContent = "Guardando…";
+
+  // Estado actual en el servidor
+  const asignados = await fetch(`${API}/api/evaluaciones/${evalActual.id}/asignados`)
+    .then(r => r.json()).catch(() => []);
+  const asignadosIds = new Set(asignados.map(u => u.id));
+
+  // Estado nuevo en el modal
+  const seleccionados = new Set(
+    [...document.querySelectorAll("#participantes-lista .chk-participante:checked")]
+      .map(c => parseInt(c.value))
+  );
+
+  // Agregar nuevos
+  for (const uid of seleccionados) {
+    if (!asignadosIds.has(uid)) {
+      await fetch(`${API}/api/evaluaciones/${evalActual.id}/asignados`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario_id: uid }),
+      }).catch(() => {});
+    }
+  }
+  // Quitar deseleccionados
+  for (const uid of asignadosIds) {
+    if (!seleccionados.has(uid)) {
+      await fetch(`${API}/api/evaluaciones/${evalActual.id}/asignados/${uid}`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
+  }
+
+  btn.disabled = false; btn.textContent = "Guardar";
+  document.getElementById("modal-participantes").classList.add("hidden");
+});
 
 // ── Start ─────────────────────────────────────────────────────────
 init();
