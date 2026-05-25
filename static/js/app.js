@@ -273,8 +273,9 @@ function renderTabs() {
   const bar = document.getElementById("tab-bar");
   bar.innerHTML = Object.entries(dominios).map(([id, nombre]) => {
     const total = controles.filter(c => c.dominio === id).length;
-    const resp = controles.filter(c => c.dominio === id && respuestas[c.id]?.madurez > 0).length;
-    return `<button class="tab ${dominioActivo === id ? "active" : ""}" data-dom="${id}">
+    const resp  = controles.filter(c => c.dominio === id && respuestas[c.id]?.madurez > 0).length;
+    const pct   = total > 0 ? resp / total : 0;
+    return `<button class="tab ${dominioActivo === id ? "active" : ""}" data-dom="${id}" style="--tab-progress:${pct}">
       ${id}<br><span class="tab-count">${nombre.split(" ").at(-1)} · ${resp}/${total}</span>
     </button>`;
   }).join("");
@@ -297,13 +298,19 @@ function renderControles(dominioId) {
   const lista = controles.filter(c => c.dominio === dominioId);
 
   panel.innerHTML = `<div class="controles-list">${lista.map(c => {
-    const resp = respuestas[c.id];
-    const madurez = resp?.madurez ?? 0;
+    const resp       = respuestas[c.id];
+    const madurez    = resp?.madurez ?? 0;
     const comentario = resp?.comentario ?? "";
-    const aplica = resp?.aplica ?? 1;
-    const cardClass = !aplica ? "" : madurez === 0 ? "" : madurez < 3 ? "gap" : "ok";
+    const aplica     = resp?.aplica ?? 1;
 
     const soloLectura = !puedeEscribir();
+
+    // Status chip
+    const chipHtml = madurez === 0
+      ? `<span class="status-chip s-pending">Sin evaluar</span>`
+      : madurez < 3
+        ? `<span class="status-chip s-gap">⚠ Brecha</span>`
+        : `<span class="status-chip s-ok">✓ Cumple</span>`;
 
     return `
     <div class="control-card ${madurez > 0 ? (madurez < 3 ? "gap" : "ok") : ""}" id="card-${c.id}">
@@ -313,24 +320,31 @@ function renderControles(dominioId) {
           <div class="control-nombre">${c.nombre}</div>
           <div class="control-desc">${c.descripcion}</div>
         </div>
+        <div class="control-status">${chipHtml}</div>
       </div>
       <div class="control-body">
-        <label class="aplica-toggle">
-          <input type="checkbox" ${aplica ? "checked" : ""} data-ctrl="${c.id}" class="chk-aplica" ${soloLectura ? "disabled" : ""} />
-          Aplica
-        </label>
-        <div class="madurez-selector" id="sel-${c.id}">
-          ${[0,1,2,3,4,5].map(n => `
-            <button class="nivel-btn ${madurez === n ? `sel-${n}` : ""}"
-              data-ctrl="${c.id}" data-n="${n}" title="${MADUREZ_LABELS[n]}"
-              ${soloLectura ? "disabled style=\"cursor:default;opacity:.7\"" : ""}>${n}</button>
-          `).join("")}
+        <div class="madurez-row">
+          <span class="madurez-lbl-top">Madurez</span>
+          <div class="madurez-selector" id="sel-${c.id}">
+            ${[0,1,2,3,4,5].map(n => `
+              <button class="nivel-btn ${madurez === n ? `sel-${n}` : ""}"
+                data-ctrl="${c.id}" data-n="${n}" title="${MADUREZ_LABELS[n]}"
+                ${soloLectura ? "disabled style=\"cursor:default;opacity:.7\"" : ""}>${n}</button>
+            `).join("")}
+          </div>
+          <span class="nivel-label" id="lbl-${c.id}">${MADUREZ_LABELS[madurez]}</span>
         </div>
-        <span class="nivel-label" id="lbl-${c.id}">${MADUREZ_LABELS[madurez]}</span>
-        ${!soloLectura ? `<button class="btn-comment" data-ctrl="${c.id}">💬 Comentario</button>` : ""}
+        <div class="control-actions-row">
+          <label class="aplica-toggle">
+            <input type="checkbox" ${aplica ? "checked" : ""} data-ctrl="${c.id}" class="chk-aplica" ${soloLectura ? "disabled" : ""} />
+            Aplica
+          </label>
+          ${!soloLectura ? `<button class="btn-comment" data-ctrl="${c.id}">💬 Comentario</button>` : ""}
+        </div>
       </div>
-      ${comentario ? `<div class="control-comment visible" id="cmt-${c.id}" style="padding:8px 12px;font-style:italic;font-size:12px;color:var(--text-muted)">${comentario}</div>` :
-        (!soloLectura ? `<textarea class="control-comment" id="cmt-${c.id}" placeholder="Agregar comentario o evidencia..."></textarea>` : "")}
+      ${comentario
+        ? `<div class="control-comment visible" id="cmt-${c.id}" style="padding:8px 12px;font-style:italic;font-size:12px;color:var(--text-muted)">${comentario}</div>`
+        : (!soloLectura ? `<textarea class="control-comment" id="cmt-${c.id}" placeholder="Agregar comentario o evidencia..."></textarea>` : "")}
     </div>`;
   }).join("")}</div>`;
 
@@ -392,11 +406,25 @@ async function guardarRespuesta(ctrlId, madurez, comentario, aplica) {
   const lbl = document.getElementById(`lbl-${ctrlId}`);
   if (lbl) lbl.textContent = MADUREZ_LABELS[madurez];
 
-  // Color de la card
+  // Color de la card + status chip
   const card = document.getElementById(`card-${ctrlId}`);
   if (card) {
     card.classList.remove("gap","ok");
     if (madurez > 0) card.classList.add(madurez < 3 ? "gap" : "ok");
+
+    const chip = card.querySelector(".status-chip");
+    if (chip) {
+      if (madurez === 0) {
+        chip.className = "status-chip s-pending";
+        chip.textContent = "Sin evaluar";
+      } else if (madurez < 3) {
+        chip.className = "status-chip s-gap";
+        chip.innerHTML = "⚠ Brecha";
+      } else {
+        chip.className = "status-chip s-ok";
+        chip.innerHTML = "✓ Cumple";
+      }
+    }
   }
 
   actualizarProgreso();
