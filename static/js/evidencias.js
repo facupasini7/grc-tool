@@ -14,8 +14,13 @@ async function cargarEvidenciasControl(ctrlId) {
     `${API}/api/evaluaciones/${evalActual.id}/evidencias?control_id=${encodeURIComponent(ctrlId)}`
   ).then(r => r.json());
 
-  const panel = document.getElementById(`ev-panel-${ctrlId.replace(/\./g, "_")}`);
+  const safeId = ctrlId.replace(/\./g, "_");
+  const panel = document.getElementById(`ev-panel-${safeId}`);
   if (!panel) return;
+
+  // Update count badge
+  const countBadge = document.getElementById(`ev-count-${safeId}`);
+  if (countBadge) countBadge.textContent = rows.length;
 
   if (!rows.length) {
     panel.innerHTML = `<div class="ev-empty">Sin evidencias cargadas.</div>`;
@@ -143,7 +148,9 @@ async function subirArchivo(file, ctrlId) {
     }
     // Restaurar zona de upload y recargar lista
     if (zone) {
-      zone.innerHTML = `<span class="upload-hint">📎 Arrastrá archivos aquí o hacé clic · PDF, DOCX, TXT, PNG, JPG</span>`;
+      zone.innerHTML = `
+        <div class="upload-zone-icon">📎</div>
+        <span class="upload-hint">Arrastrá archivos aquí o hacé clic · PDF, DOCX, TXT, PNG, JPG</span>`;
     }
     await cargarEvidenciasControl(ctrlId);
   };
@@ -166,12 +173,16 @@ window.renderControles = function renderControles(dominioId) {
     evDiv.className = "evidencia-section";
     evDiv.innerHTML = `
       <div class="ev-toggle" onclick="toggleEvidencia('${c.id}')">
-        📎 Evidencia <span class="ev-toggle-arrow" id="ev-arrow-${safeId}">▸</span>
+        <span>📎</span>
+        <span class="ev-toggle-label">Evidencia</span>
+        <span class="ev-toggle-count" id="ev-count-${safeId}">0</span>
+        <span class="ev-toggle-arrow" id="ev-arrow-${safeId}">▸</span>
       </div>
       <div id="ev-body-${safeId}" class="ev-body hidden">
         ${puedeSubirEvidencia() ? `
         <div class="upload-zone" id="upload-zone-${safeId}">
-          <span class="upload-hint">📎 Arrastrá archivos aquí o hacé clic · PDF, DOCX, TXT, PNG, JPG</span>
+          <div class="upload-zone-icon">📎</div>
+          <span class="upload-hint">Arrastrá archivos aquí o hacé clic · PDF, DOCX, TXT, PNG, JPG</span>
           <input type="file" id="upload-input-${safeId}" class="upload-input" accept=".pdf,.docx,.doc,.txt,.md,.csv,.json,.xml,.png,.jpg,.jpeg,.webp,.gif,.bmp" />
         </div>` : ""}
         <div id="ev-panel-${safeId}" class="ev-panel"></div>
@@ -188,6 +199,9 @@ function toggleEvidencia(ctrlId) {
   if (!body) return;
   const isOpen = !body.classList.contains("hidden");
   body.classList.toggle("hidden", isOpen);
-  arrow.textContent = isOpen ? "▸" : "▾";
+  if (arrow) {
+    arrow.textContent = isOpen ? "▸" : "▾";
+    arrow.classList.toggle("open", !isOpen);
+  }
   if (!isOpen) cargarEvidenciasControl(ctrlId);
 }
