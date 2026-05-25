@@ -246,6 +246,20 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({"error": "Sin acceso al log de auditoría."}, 403)
         return False
 
+    def _require_evidence_upload(self, user):
+        """Subir evidencia: admin, analista/auditor y auditado."""
+        if user.get("rol") in ("admin", "analista", "auditor", "auditado"):
+            return True
+        self.send_json({"error": "Tu rol no permite subir evidencia."}, 403)
+        return False
+
+    def _block_auditado(self, user):
+        """Bloquea al auditado de endpoints de resultados/hallazgos (confidenciales)."""
+        if user.get("rol") == "auditado":
+            self.send_json({"error": "Sin acceso a esta sección."}, 403)
+            return True
+        return False
+
     def _ip(self):
         return self.client_address[0]
 
@@ -349,6 +363,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json([dict(r) for r in rows])
 
         elif path.startswith("/api/evaluaciones/") and "/stats" in path:
+            if self._block_auditado(user): return
             eid = int(path.split("/")[3])
             self.send_json(calcular_stats(eid))
 
@@ -377,6 +392,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json([dict(r) for r in rows])
 
         elif path.startswith("/api/evaluaciones/") and "/hallazgos" in path:
+            if self._block_auditado(user): return
             eid = int(path.split("/")[3])
             with get_conn() as conn:
                 rows = conn.execute(
@@ -408,6 +424,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(DOMINIOS_PCI)
 
         elif path.startswith("/api/evaluaciones/") and "/cobertura/" in path:
+            if self._block_auditado(user): return
             parts = path.split("/")
             eid   = int(parts[3])
             fw    = parts[5].upper()
@@ -417,6 +434,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(calcular_cobertura(eid, fw))
 
         elif path.startswith("/api/report/"):
+            if self._block_auditado(user): return
             eid = int(path.split("/")[3])
             with get_conn() as conn:
                 ev = conn.execute("SELECT * FROM evaluaciones WHERE id=?", (eid,)).fetchone()
@@ -475,7 +493,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "username y password son requeridos"}, 400)
                 return
             rol_nuevo = body.get("rol", "analista")
-            if rol_nuevo not in ("admin", "analista", "auditor_externo"):
+            if rol_nuevo not in ("admin", "analista", "auditor_externo", "auditado"):
                 rol_nuevo = "analista"
             try:
                 with get_conn() as conn:
@@ -531,7 +549,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Subir evidencia (base64) ──
         elif path.startswith("/api/evaluaciones/") and "/evidencias" in path and "analizar" not in path:
-            if not self._require_write(user):
+            if not self._require_evidence_upload(user):
                 return
             eid      = int(path.split("/")[3])
             ctrl_id  = body.get("control_id", "")
@@ -678,7 +696,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             campos = ["nombre", "rol", "activo"]
             # Validar rol si viene en el body
-            if "rol" in body and body["rol"] not in ("admin", "analista", "auditor_externo"):
+            if "rol" in body and body["rol"] not in ("admin", "analista", "auditor_externo", "auditado"):
                 self.send_json({"error": "Rol inválido."}, 400)
                 return
             sets   = ", ".join(f"{c}=?" for c in campos if c in body)

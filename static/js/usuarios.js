@@ -5,6 +5,7 @@ const ROL_DISPLAY = {
   analista:       { label: "Analista",        css: "role-analista" },
   auditor:        { label: "Analista",        css: "role-analista" },  // alias legacy
   auditor_externo:{ label: "Auditor Externo", css: "role-externo"  },
+  auditado:       { label: "Auditado",        css: "role-auditado" },
 };
 
 // ── Cargar y renderizar lista ────────────────────────────────────────

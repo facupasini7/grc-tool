@@ -1192,12 +1192,14 @@ body {
 .role-admin       { background: #6d28d9; color: #fff; }
 .role-analista    { background: #1d4ed8; color: #fff; }
 .role-externo     { background: #047857; color: #fff; }
+.role-auditado    { background: #b45309; color: #fff; }
 .role-default     { background: #475569; color: #fff; }
 
 /* Sidebar role display */
 .user-display-role.role-admin    { color: #a78bfa; }
 .user-display-role.role-analista { color: #93c5fd; }
 .user-display-role.role-externo  { color: #6ee7b7; }
+.user-display-role.role-auditado { color: #fbbf24; }
 
 /* ── Gestión de Usuarios (Admin) ──────────────────────────────────── */
 .usuarios-header {

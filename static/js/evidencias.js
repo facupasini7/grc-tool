@@ -169,7 +169,7 @@ window.renderControles = function renderControles(dominioId) {
         📎 Evidencia <span class="ev-toggle-arrow" id="ev-arrow-${safeId}">▸</span>
       </div>
       <div id="ev-body-${safeId}" class="ev-body hidden">
-        ${puedeEscribir() ? `
+        ${puedeSubirEvidencia() ? `
         <div class="upload-zone" id="upload-zone-${safeId}">
           <span class="upload-hint">📎 Arrastrá archivos aquí o hacé clic · PDF, DOCX, TXT, PNG, JPG</span>
           <input type="file" id="upload-input-${safeId}" class="upload-input" accept=".pdf,.docx,.doc,.txt,.md,.csv,.json,.xml,.png,.jpg,.jpeg,.webp,.gif,.bmp" />
@@ -177,7 +177,7 @@ window.renderControles = function renderControles(dominioId) {
         <div id="ev-panel-${safeId}" class="ev-panel"></div>
       </div>`;
     card.appendChild(evDiv);
-    if (puedeEscribir()) setupUploadZone(c.id);
+    if (puedeSubirEvidencia()) setupUploadZone(c.id);
   });
 }
 

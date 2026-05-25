@@ -20,24 +20,32 @@ const MADUREZ_LABELS = ["Inexistente","Inicial","Repetible","Definido","Gestiona
 const ROL_LABELS = {
   admin:          "Administrador",
   analista:       "Analista",
-  auditor:        "Analista",        // alias legacy
+  auditor:        "Analista",          // alias legacy
   auditor_externo:"Auditor Externo",
+  auditado:       "Auditado",
 };
 const ROL_CSS = {
   admin:          "role-admin",
   analista:       "role-analista",
   auditor:        "role-analista",
   auditor_externo:"role-externo",
+  auditado:       "role-auditado",
 };
 
 function puedeEscribir() {
   return ["admin", "analista", "auditor"].includes(usuarioActual?.rol);
+}
+function puedeSubirEvidencia() {
+  return ["admin", "analista", "auditor", "auditado"].includes(usuarioActual?.rol);
 }
 function esAdmin() {
   return usuarioActual?.rol === "admin";
 }
 function esAuditorExterno() {
   return usuarioActual?.rol === "auditor_externo";
+}
+function esAuditado() {
+  return usuarioActual?.rol === "auditado";
 }
 
 // ── Navegación ────────────────────────────────────────────────────
@@ -86,6 +94,20 @@ async function init() {
   // "Nueva evaluación" solo para quien puede escribir
   const btnNueva = document.getElementById("btn-nueva");
   if (btnNueva && !puedeEscribir()) btnNueva.style.display = "none";
+
+  // Auditado: ocultar secciones que no le corresponden
+  if (esAuditado()) {
+    ["stats", "hallazgos", "cobertura", "remediacion", "auditoria"].forEach(v => {
+      const nav = document.querySelector(`[data-view="${v}"]`);
+      if (nav) nav.style.display = "none";
+    });
+    // Botones del header de evaluación que no aplican al auditado
+    ["btn-ver-stats", "btn-ver-hallazgos", "btn-ver-cobertura",
+     "btn-ver-remediacion", "btn-pdf"].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.style.display = "none";
+    });
+  }
 
   // Cargar controles ISO 27001 base
   [_iso27001Controles, _iso27001Dominios] = await Promise.all([
