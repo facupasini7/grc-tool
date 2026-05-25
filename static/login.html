@@ -45,6 +45,11 @@
         </button>
       </form>
 
+      <div class="login-links">
+        <a href="/forgot-password" class="login-link">¿Olvidaste tu contraseña?</a>
+        <a href="/register" class="login-link">Registrarse</a>
+      </div>
+
       <div class="login-hint">
         <span class="login-hint-label">Credenciales por defecto</span>
         <span class="login-hint-creds">
@@ -75,7 +80,7 @@ document.getElementById("login-form").addEventListener("submit", async e => {
     });
     const data = await resp.json();
     if (resp.ok && data.ok) {
-      window.location.href = "/";
+      window.location.href = data.debe_cambiar_password ? "/change-password" : "/";
     } else {
       err.textContent = data.error || "Error al iniciar sesión.";
       err.classList.remove("hidden");

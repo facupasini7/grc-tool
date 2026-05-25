@@ -1,11 +1,13 @@
 """
 Módulo de autenticación para la GRC Tool.
-Provee: hash de contraseñas (PBKDF2), sesiones, audit log y setup inicial.
+Provee: hash de contraseñas (PBKDF2), sesiones, audit log, reset tokens y setup inicial.
 """
 import hashlib
 import hmac
 import os
 import secrets
+import smtplib
+from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 
 from database import get_conn
@@ -54,11 +56,12 @@ def get_user_from_token(token: str) -> dict | None:
         return None
     with get_conn() as conn:
         row = conn.execute(
-            """SELECT u.id, u.username, u.nombre, u.rol
+            """SELECT u.id, u.username, u.nombre, u.rol, u.debe_cambiar_password
                FROM sesiones s JOIN usuarios u ON s.usuario_id = u.id
                WHERE s.token = ?
                  AND s.expira_en > datetime('now')
-                 AND u.activo = 1""",
+                 AND u.activo = 1
+                 AND u.aprobado = 1""",
             (token,),
         ).fetchone()
     return dict(row) if row else None
@@ -103,14 +106,89 @@ def log_action(
         pass  # el log nunca debe interrumpir la operación principal
 
 
+# ── Reset de contraseña ───────────────────────────────────────────────────────
+
+_RESET_HOURS = 2
+
+
+def create_reset_token(usuario_id: int) -> str:
+    """Genera un token de reset válido por 2 h (invalida tokens anteriores)."""
+    token = secrets.token_urlsafe(32)
+    expira = (datetime.now() + timedelta(hours=_RESET_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        conn.execute("UPDATE password_resets SET usado=1 WHERE usuario_id=?", (usuario_id,))
+        conn.execute(
+            "INSERT INTO password_resets (token, usuario_id, expira_en) VALUES (?,?,?)",
+            (token, usuario_id, expira),
+        )
+    return token
+
+
+def validate_reset_token(token: str) -> int | None:
+    """Retorna usuario_id si el token es válido y no fue usado, o None."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT usuario_id FROM password_resets "
+            "WHERE token=? AND usado=0 AND expira_en > datetime('now')",
+            (token,),
+        ).fetchone()
+    return row["usuario_id"] if row else None
+
+
+def consume_reset_token(token: str) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE password_resets SET usado=1 WHERE token=?", (token,))
+
+
+def send_reset_email(email: str, token: str, base_url: str) -> bool:
+    """
+    Envía email de recuperación. Retorna True si se envió.
+    Requiere variables de entorno:
+      GRC_SMTP_HOST, GRC_SMTP_PORT (def 587), GRC_SMTP_USER, GRC_SMTP_PASS, GRC_SMTP_FROM
+    Si no están configuradas, retorna False (el admin debe enviar el link manualmente).
+    """
+    host = os.environ.get("GRC_SMTP_HOST", "")
+    if not host:
+        return False
+    port     = int(os.environ.get("GRC_SMTP_PORT", "587"))
+    user     = os.environ.get("GRC_SMTP_USER", "")
+    password = os.environ.get("GRC_SMTP_PASS", "")
+    from_addr = os.environ.get("GRC_SMTP_FROM", user)
+    reset_url = f"{base_url}/reset-password?token={token}"
+
+    body = (
+        f"Hola,\n\n"
+        f"Recibimos una solicitud para restablecer tu contraseña en GRC Tool.\n\n"
+        f"Hacé clic en el siguiente enlace (válido por {_RESET_HOURS} horas):\n"
+        f"{reset_url}\n\n"
+        f"Si no solicitaste este cambio, ignorá este correo.\n"
+    )
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = "GRC Tool — Recuperación de contraseña"
+    msg["From"]    = from_addr
+    msg["To"]      = email
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as smtp:
+            smtp.starttls()
+            if user:
+                smtp.login(user, password)
+            smtp.sendmail(from_addr, [email], msg.as_string())
+        return True
+    except Exception:
+        return False
+
+
 # ── Setup inicial ─────────────────────────────────────────────────────────────
 
 def init_default_users() -> None:
-    """Crea el usuario admin por defecto si no existe ningún usuario."""
+    """Crea el usuario admin por defecto si no existe ningún usuario.
+    El admin debe cambiar la contraseña en el primer login."""
     with get_conn() as conn:
         exists = conn.execute("SELECT id FROM usuarios LIMIT 1").fetchone()
         if not exists:
             conn.execute(
-                "INSERT INTO usuarios (username, password_hash, nombre, rol) VALUES (?,?,?,?)",
-                ("admin", hash_password("Admin1234!"), "Administrador", "admin"),
+                "INSERT INTO usuarios "
+                "(username, password_hash, nombre, rol, debe_cambiar_password) "
+                "VALUES (?,?,?,?,?)",
+                ("admin", hash_password("Admin1234!"), "Administrador", "admin", 1),
             )

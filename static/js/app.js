@@ -73,6 +73,12 @@ async function init() {
   }
   usuarioActual = await meResp.json();
 
+  // Contraseña forzada: redirigir antes de mostrar la app
+  if (usuarioActual.debe_cambiar_password) {
+    window.location.href = "/change-password";
+    return;
+  }
+
   // Mostrar info de usuario en sidebar
   const el = document.getElementById("sidebar-username");
   const rl = document.getElementById("sidebar-role");

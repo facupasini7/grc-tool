@@ -16,14 +16,31 @@ def init_db():
     with get_conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS usuarios (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                username      TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                nombre        TEXT DEFAULT '',
-                rol           TEXT DEFAULT 'auditor',
-                activo        INTEGER DEFAULT 1,
-                creado_en     TEXT DEFAULT (datetime('now')),
-                ultimo_login  TEXT
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                username              TEXT NOT NULL UNIQUE,
+                password_hash         TEXT NOT NULL,
+                nombre                TEXT DEFAULT '',
+                email                 TEXT DEFAULT '',
+                rol                   TEXT DEFAULT 'auditor',
+                activo                INTEGER DEFAULT 1,
+                aprobado              INTEGER DEFAULT 1,
+                debe_cambiar_password INTEGER DEFAULT 0,
+                creado_en             TEXT DEFAULT (datetime('now')),
+                ultimo_login          TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS password_resets (
+                token      TEXT PRIMARY KEY,
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                expira_en  TEXT NOT NULL,
+                usado      INTEGER DEFAULT 0,
+                creado_en  TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS evaluacion_usuarios (
+                evaluacion_id INTEGER NOT NULL REFERENCES evaluaciones(id) ON DELETE CASCADE,
+                usuario_id    INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                PRIMARY KEY (evaluacion_id, usuario_id)
             );
 
             CREATE TABLE IF NOT EXISTS sesiones (
@@ -99,8 +116,20 @@ def init_db():
                 actualizado_en      TEXT DEFAULT (datetime('now'))
             );
         """)
-        # Migración: agregar columna frameworks si no existe (DBs anteriores)
-        try:
-            conn.execute("ALTER TABLE evaluaciones ADD COLUMN frameworks TEXT DEFAULT '[\"ISO27001\"]'")
-        except Exception:
-            pass  # ya existe
+    # Migraciones para DBs existentes (se ignoran si la columna ya existe)
+    _migrate()
+
+
+def _migrate():
+    migrations = [
+        "ALTER TABLE evaluaciones ADD COLUMN frameworks TEXT DEFAULT '[\"ISO27001\"]'",
+        "ALTER TABLE usuarios ADD COLUMN email TEXT DEFAULT ''",
+        "ALTER TABLE usuarios ADD COLUMN aprobado INTEGER DEFAULT 1",
+        "ALTER TABLE usuarios ADD COLUMN debe_cambiar_password INTEGER DEFAULT 0",
+    ]
+    with get_conn() as conn:
+        for sql in migrations:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass  # columna ya existe

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registrarse — GRC Tool</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body class="login-body">
+
+  <div class="login-wrap">
+    <div class="login-brand">
+      <span class="login-brand-icon">🔐</span>
+      <h1 class="login-brand-name">GRC Tool</h1>
+      <p class="login-brand-sub">Análisis de Brechas · ISO 27001 · BCRA · PCI DSS</p>
+    </div>
+
+    <div class="login-card">
+      <h2 class="login-title">Crear cuenta</h2>
+
+      <div id="reg-success" class="hidden" style="text-align:center;padding:24px 0">
+        <div style="font-size:40px;margin-bottom:12px">✅</div>
+        <div style="font-weight:700;margin-bottom:8px">¡Solicitud enviada!</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:20px">
+          Tu cuenta fue creada y está pendiente de aprobación.<br>
+          El administrador la revisará en breve.
+        </div>
+        <a href="/login" class="btn btn-primary" style="display:inline-block;text-decoration:none">
+          Volver al login
+        </a>
+      </div>
+
+      <form id="reg-form" autocomplete="on">
+        <div class="login-field">
+          <label for="r-nombre">Nombre completo</label>
+          <input type="text" id="r-nombre" placeholder="Ej: María García" autocomplete="name" autofocus />
+        </div>
+        <div class="login-field">
+          <label for="r-email">Email</label>
+          <input type="email" id="r-email" placeholder="tu@empresa.com" autocomplete="email" />
+        </div>
+        <div class="login-field">
+          <label for="r-user">Usuario</label>
+          <input type="text" id="r-user" placeholder="Ej: mgarcia" autocomplete="username" />
+        </div>
+        <div class="login-field">
+          <label for="r-pass">Contraseña <small style="color:#94a3b8">(mín. 8 caracteres)</small></label>
+          <input type="password" id="r-pass" placeholder="••••••••" autocomplete="new-password" />
+        </div>
+
+        <div id="reg-error" class="login-error hidden">Error.</div>
+
+        <button type="submit" class="btn btn-primary btn-login" id="btn-reg">
+          Crear cuenta
+        </button>
+      </form>
+
+      <div class="login-links">
+        <a href="/login" class="login-link">Ya tengo cuenta</a>
+      </div>
+    </div>
+  </div>
+
+<script>
+document.getElementById("reg-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn  = document.getElementById("btn-reg");
+  const err  = document.getElementById("reg-error");
+  err.classList.add("hidden");
+  btn.disabled = true; btn.textContent = "Registrando…";
+
+  const nombre   = document.getElementById("r-nombre").value.trim();
+  const email    = document.getElementById("r-email").value.trim();
+  const username = document.getElementById("r-user").value.trim();
+  const password = document.getElementById("r-pass").value;
+
+  try {
+    const resp = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre, email, username, password }),
+    });
+    const data = await resp.json();
+    if (resp.ok && data.ok) {
+      document.getElementById("reg-form").classList.add("hidden");
+      document.getElementById("reg-success").classList.remove("hidden");
+    } else {
+      err.textContent = data.error || "Error al registrarse.";
+      err.classList.remove("hidden");
+    }
+  } catch {
+    err.textContent = "Error de conexión.";
+    err.classList.remove("hidden");
+  } finally {
+    btn.disabled = false; btn.textContent = "Crear cuenta";
+  }
+});
+</script>
+</body>
+</html>

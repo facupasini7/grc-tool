@@ -214,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
         Si GRC_AUTH=0 (modo test/dev), retorna un usuario admin ficticio.
         """
         if os.environ.get("GRC_AUTH", "1") == "0":
-            return {"id": None, "username": "dev", "nombre": "Dev", "rol": "admin"}
+            return {"id": None, "username": "dev", "nombre": "Dev", "rol": "admin", "debe_cambiar_password": 0}
         user = self._get_user()
         if not user:
             if self.path.startswith("/api/"):
@@ -265,6 +265,76 @@ class Handler(BaseHTTPRequestHandler):
 
     # ── Login / Logout ────────────────────────────────────────────────────────
 
+    def _handle_register(self, body):
+        from auth import hash_password
+        username = body.get("username", "").strip()
+        password = body.get("password", "")
+        nombre   = body.get("nombre", "").strip()
+        email    = body.get("email", "").strip()
+        if not username or not password or not nombre:
+            self.send_json({"error": "Nombre, usuario y contraseña son requeridos."}, 400)
+            return
+        if len(password) < 8:
+            self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+            return
+        try:
+            with get_conn() as conn:
+                cur = conn.execute(
+                    "INSERT INTO usuarios (username, password_hash, nombre, email, rol, aprobado) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (username, hash_password(password), nombre, email, "auditado", 0),
+                )
+            self.send_json({"ok": True, "id": cur.lastrowid})
+        except Exception as e:
+            self.send_json({"error": f"El usuario '{username}' ya existe."}, 409)
+
+    def _handle_forgot_password(self, body):
+        from auth import create_reset_token, send_reset_email
+        identifier = body.get("email_or_username", "").strip()
+        if not identifier:
+            self.send_json({"error": "Ingresá tu email o usuario."}, 400)
+            return
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT id, email, username FROM usuarios "
+                "WHERE (email=? OR username=?) AND activo=1",
+                (identifier, identifier),
+            ).fetchone()
+        # Siempre responder ok para no revelar si existe el usuario
+        if row:
+            row = dict(row)
+            token = create_reset_token(row["id"])
+            base_url = f"http://{self.headers.get('Host', 'localhost:8090')}"
+            email_sent = send_reset_email(row["email"], token, base_url) if row["email"] else False
+            reset_url  = f"{base_url}/reset-password?token={token}"
+            # Si no hay SMTP, devolvemos el link para que el admin lo comparta
+            self.send_json({"ok": True, "email_sent": email_sent,
+                            "reset_url": reset_url if not email_sent else None})
+        else:
+            self.send_json({"ok": True, "email_sent": False, "reset_url": None})
+
+    def _handle_reset_password(self, body):
+        from auth import validate_reset_token, consume_reset_token, hash_password
+        token  = body.get("token", "").strip()
+        new_pw = body.get("password", "")
+        if not token:
+            self.send_json({"error": "Token inválido."}, 400)
+            return
+        if len(new_pw) < 8:
+            self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+            return
+        uid = validate_reset_token(token)
+        if not uid:
+            self.send_json({"error": "El link expiró o ya fue utilizado."}, 400)
+            return
+        consume_reset_token(token)
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0 WHERE id=?",
+                (hash_password(new_pw), uid),
+            )
+        self.send_json({"ok": True})
+
     def _handle_login(self, body):
         from auth import verify_password, create_session, log_action
         username = body.get("username", "").strip()
@@ -272,11 +342,19 @@ class Handler(BaseHTTPRequestHandler):
 
         with get_conn() as conn:
             row = conn.execute(
-                "SELECT id, password_hash, nombre, rol FROM usuarios WHERE username=? AND activo=1",
+                "SELECT id, password_hash, nombre, rol, activo, aprobado, debe_cambiar_password "
+                "FROM usuarios WHERE username=?",
                 (username,),
             ).fetchone()
 
         if row and verify_password(password, row["password_hash"]):
+            row = dict(row)
+            if not row["activo"]:
+                self.send_json({"error": "Cuenta desactivada. Contactá al administrador."}, 401)
+                return
+            if not row["aprobado"]:
+                self.send_json({"error": "Tu cuenta está pendiente de aprobación por el administrador."}, 401)
+                return
             token = create_session(row["id"])
             log_action(row["id"], username, "login", ip=self._ip())
             with get_conn() as conn:
@@ -285,7 +363,8 @@ class Handler(BaseHTTPRequestHandler):
                 )
             cookie = f"grc_session={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800"
             self.send_json_with_cookie(
-                {"ok": True, "nombre": row["nombre"], "rol": row["rol"]}, cookie
+                {"ok": True, "nombre": row["nombre"], "rol": row["rol"],
+                 "debe_cambiar_password": row["debe_cambiar_password"]}, cookie
             )
         else:
             log_action(None, username, "login_fallido", ip=self._ip())
@@ -312,6 +391,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/login":
             self.send_file(STATIC_DIR / "login.html", "text/html; charset=utf-8")
             return
+        if path == "/register":
+            self.send_file(STATIC_DIR / "register.html", "text/html; charset=utf-8")
+            return
+        if path == "/forgot-password":
+            self.send_file(STATIC_DIR / "forgot-password.html", "text/html; charset=utf-8")
+            return
+        if path == "/reset-password":
+            self.send_file(STATIC_DIR / "reset-password.html", "text/html; charset=utf-8")
+            return
+        if path == "/change-password":
+            self.send_file(STATIC_DIR / "change-password.html", "text/html; charset=utf-8")
+            return
         if path.startswith("/static/"):
             rel   = path[len("/static/"):]
             ext   = Path(rel).suffix
@@ -331,6 +422,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({
                 "id": user["id"], "username": user["username"],
                 "nombre": user["nombre"], "rol": user["rol"],
+                "debe_cambiar_password": user.get("debe_cambiar_password", 0),
             })
 
         elif path == "/api/audit-log":
@@ -357,9 +449,18 @@ class Handler(BaseHTTPRequestHandler):
 
         elif path == "/api/evaluaciones":
             with get_conn() as conn:
-                rows = conn.execute(
-                    "SELECT * FROM evaluaciones ORDER BY actualizada DESC, id DESC"
-                ).fetchall()
+                if user.get("rol") == "auditado" and user.get("id"):
+                    rows = conn.execute(
+                        """SELECT e.* FROM evaluaciones e
+                           JOIN evaluacion_usuarios eu ON eu.evaluacion_id = e.id
+                           WHERE eu.usuario_id = ?
+                           ORDER BY e.actualizada DESC, e.id DESC""",
+                        (user["id"],),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT * FROM evaluaciones ORDER BY actualizada DESC, id DESC"
+                    ).fetchall()
             self.send_json([dict(r) for r in rows])
 
         elif path.startswith("/api/evaluaciones/") and "/stats" in path:
@@ -397,6 +498,17 @@ class Handler(BaseHTTPRequestHandler):
             with get_conn() as conn:
                 rows = conn.execute(
                     "SELECT * FROM hallazgos WHERE evaluacion_id=? ORDER BY creado_en DESC", (eid,)
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        elif path.startswith("/api/evaluaciones/") and path.endswith("/asignados"):
+            if not self._require_admin(user): return
+            eid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT u.id, u.username, u.nombre, u.rol, u.email
+                       FROM evaluacion_usuarios eu JOIN usuarios u ON eu.usuario_id = u.id
+                       WHERE eu.evaluacion_id = ?""", (eid,)
                 ).fetchall()
             self.send_json([dict(r) for r in rows])
 
@@ -474,6 +586,15 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/logout":
             self._handle_logout()
             return
+        if path == "/api/register":
+            self._handle_register(body)
+            return
+        if path == "/api/forgot-password":
+            self._handle_forgot_password(body)
+            return
+        if path == "/api/reset-password":
+            self._handle_reset_password(body)
+            return
 
         # ── Requiere autenticación ──
         user = self._require_auth()
@@ -481,6 +602,69 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         from auth import log_action
+
+        # ── Cambiar contraseña propia ──
+        if path == "/api/change-password":
+            from auth import hash_password as hp, verify_password as vp
+            new_pw = body.get("password", "")
+            if len(new_pw) < 8:
+                self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+                return
+            with get_conn() as conn:
+                conn.execute(
+                    "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0 WHERE id=?",
+                    (hp(new_pw), user["id"]),
+                )
+            log_action(user["id"], user["username"], "cambiar_password", ip=self._ip())
+            self.send_json({"ok": True})
+            return
+
+        # ── Asignar usuario a evaluación (admin) ──
+        if path.startswith("/api/evaluaciones/") and path.endswith("/asignados"):
+            if not self._require_admin(user): return
+            eid = int(path.split("/")[3])
+            uid = body.get("usuario_id")
+            if not uid:
+                self.send_json({"error": "usuario_id requerido"}, 400)
+                return
+            try:
+                with get_conn() as conn:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO evaluacion_usuarios (evaluacion_id, usuario_id) VALUES (?,?)",
+                        (eid, uid),
+                    )
+                self.send_json({"ok": True})
+            except Exception as e:
+                self.send_json({"error": str(e)}, 400)
+            return
+
+        # ── Aprobar usuario pendiente (admin) ──
+        if path.startswith("/api/usuarios/") and path.endswith("/aprobar"):
+            if not self._require_admin(user): return
+            uid = int(path.split("/")[3])
+            with get_conn() as conn:
+                conn.execute("UPDATE usuarios SET aprobado=1 WHERE id=?", (uid,))
+            log_action(user["id"], user["username"], "aprobar_usuario", "usuario", uid, ip=self._ip())
+            self.send_json({"ok": True})
+            return
+
+        # ── Generar link de reset (admin) ──
+        if path.startswith("/api/usuarios/") and path.endswith("/reset-link"):
+            if not self._require_admin(user): return
+            uid = int(path.split("/")[3])
+            from auth import create_reset_token, send_reset_email
+            with get_conn() as conn:
+                row = conn.execute("SELECT email, username FROM usuarios WHERE id=?", (uid,)).fetchone()
+            if not row:
+                self.send_json({"error": "Usuario no encontrado"}, 404)
+                return
+            token = create_reset_token(uid)
+            base_url = f"http://{self.headers.get('Host', 'localhost:8090')}"
+            reset_url = f"{base_url}/reset-password?token={token}"
+            email_sent = send_reset_email(dict(row)["email"], token, base_url) if dict(row)["email"] else False
+            log_action(user["id"], user["username"], "reset_password_link", "usuario", uid, ip=self._ip())
+            self.send_json({"ok": True, "reset_url": reset_url, "email_sent": email_sent})
+            return
 
         # ── Crear usuario (solo admin) ──
         if path == "/api/usuarios":
@@ -756,6 +940,19 @@ class Handler(BaseHTTPRequestHandler):
                 conn.execute("DELETE FROM evaluaciones WHERE id=?", (eid,))
             log_action(user["id"], user["username"], "eliminar_evaluacion",
                        "evaluacion", eid, nombre, self._ip())
+            self.send_json({"ok": True})
+
+        elif "/asignados/" in path:
+            # DELETE /api/evaluaciones/:eid/asignados/:uid
+            if not self._require_admin(user): return
+            parts = path.split("/")
+            eid = int(parts[3])
+            uid = int(parts[5])
+            with get_conn() as conn:
+                conn.execute(
+                    "DELETE FROM evaluacion_usuarios WHERE evaluacion_id=? AND usuario_id=?",
+                    (eid, uid),
+                )
             self.send_json({"ok": True})
 
         elif "/usuarios/" in path:
