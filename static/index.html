@@ -1,424 +1,60 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light" data-density="default">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ISO 27001:2022 Gap Analysis</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
-  <script src="/static/js/chart.umd.min.js"></script>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NormaLab — GRC Proof of Concept</title>
+
+  <!-- Geist fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+
+  <!-- Design system CSS -->
+  <link rel="stylesheet" href="/static/css/style.css"/>
 </head>
 <body>
+  <div id="root"></div>
 
-<aside class="sidebar">
-  <div class="sidebar-brand">
-    <span class="brand-icon">🔐</span>
-    <span class="brand-text">ISO 27001<br><small>Gap Analysis</small></span>
-  </div>
-  <nav class="sidebar-nav">
-    <a href="#" class="nav-item active" data-view="home"><span class="nav-icon">🏠</span> Inicio</a>
-    <a href="#" class="nav-item" data-view="evaluacion"><span class="nav-icon">📋</span> Evaluación</a>
-    <a href="#" class="nav-item" data-view="stats"><span class="nav-icon">📊</span> Resultados</a>
-    <a href="#" class="nav-item" data-view="hallazgos"><span class="nav-icon">⚠️</span> Hallazgos</a>
-    <a href="#" class="nav-item" data-view="cobertura"><span class="nav-icon">🗺️</span> Cobertura</a>
-    <a href="#" class="nav-item" data-view="remediacion"><span class="nav-icon">📌</span> Remediación</a>
-    <a href="#" class="nav-item" data-view="auditoria" id="nav-auditoria"><span class="nav-icon">🕵️</span> Auditoría</a>
-    <a href="#" class="nav-item hidden" data-view="usuarios" id="nav-usuarios"><span class="nav-icon">👥</span> Usuarios</a>
-  </nav>
-  <div class="sidebar-user">
-    <div class="user-info-row">
-      <div class="user-avatar-icon">👤</div>
-      <div>
-        <div class="user-display-name" id="sidebar-username">—</div>
-        <div class="user-display-role" id="sidebar-role">—</div>
-      </div>
-    </div>
-    <button class="btn-logout" id="btn-logout">↩ Cerrar sesión</button>
-  </div>
-</aside>
+  <!-- React 18 + ReactDOM (UMD) -->
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
 
-<main class="main">
+  <!-- Babel standalone — transpiles type="text/babel" scripts in-browser -->
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
 
-  <!-- ── Home ─────────────────────────────────────────────────────────── -->
-  <div id="view-home" class="view active">
-    <div class="page-header">
-      <h1>Gap Analysis ISO 27001:2022</h1>
-      <p class="subtitle">Evaluá la madurez de controles de seguridad de tu organización frente al estándar internacional.</p>
-    </div>
-    <div class="card-row">
-      <div class="info-card"><div class="info-icon">📋</div><div class="info-title">93 Controles</div><div class="info-desc">Cobertura completa del Anexo A de ISO/IEC 27001:2022</div></div>
-      <div class="info-card"><div class="info-icon">🏗️</div><div class="info-title">4 Dominios</div><div class="info-desc">Organizacional · Personas · Físico · Tecnológico</div></div>
-      <div class="info-card"><div class="info-icon">🤖</div><div class="info-title">IA Local</div><div class="info-desc">Análisis de evidencias con llama3.2-vision via Ollama</div></div>
-      <div class="info-card"><div class="info-icon">⚠️</div><div class="info-title">Hallazgos</div><div class="info-desc">Generación y seguimiento de no conformidades tipo auditoría</div></div>
-    </div>
-    <div class="section-title">Evaluaciones existentes</div>
-    <div id="lista-evaluaciones"></div>
-    <button class="btn btn-primary" id="btn-nueva">+ Nueva evaluación</button>
+  <!-- API client (plain JS, no JSX needed) -->
+  <script src="/static/js/api.js"></script>
 
-    <div id="modal-nueva" class="modal hidden">
-      <div class="modal-box">
-        <h2>Nueva evaluación</h2>
-        <label>Nombre de la evaluación</label>
-        <input type="text" id="inp-nombre" placeholder="Ej: Evaluación inicial Q1 2025" />
-        <label>Empresa / Organización</label>
-        <input type="text" id="inp-empresa" placeholder="Nombre de la empresa" />
-        <label>Alcance (opcional)</label>
-        <textarea id="inp-alcance" rows="2" placeholder="Ej: Infraestructura cloud y sistemas corporativos"></textarea>
+  <!-- ── JSX modules loaded in dependency order ─────────────────── -->
 
-        <label>Frameworks a auditar</label>
-        <div class="fw-modal-grid" id="fw-modal-grid">
-          <div class="fw-modal-card selected" data-fw="ISO27001">
-            <span class="fw-modal-icon">📋</span>
-            <span class="fw-modal-name">ISO 27001:2022</span>
-          </div>
-          <div class="fw-modal-card" data-fw="A7777">
-            <span class="fw-modal-icon">🏦</span>
-            <span class="fw-modal-name">BCRA A 7777</span>
-          </div>
-          <div class="fw-modal-card" data-fw="A7783">
-            <span class="fw-modal-icon">🏦</span>
-            <span class="fw-modal-name">BCRA A 7783</span>
-          </div>
-          <div class="fw-modal-card" data-fw="PCI">
-            <span class="fw-modal-icon">💳</span>
-            <span class="fw-modal-name">PCI DSS v4.0</span>
-          </div>
-        </div>
-        <p class="fw-modal-hint">Seleccioná los frameworks que forman parte del alcance de la auditoría. Al menos uno debe estar seleccionado.</p>
+  <!-- 1. Icon set -->
+  <script type="text/babel" src="/static/js/icons.jsx"></script>
 
-        <div id="modal-participantes-wrap">
-          <label>Participantes <small style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8">(opcional — podés agregarlos después)</small></label>
-          <div id="modal-participantes-lista" class="participantes-check-list">
-            <div class="participantes-loading">Cargando usuarios…</div>
-          </div>
-        </div>
+  <!-- 2. Shared UI components + hooks (Badge, Modal, Spinner, useApi, formatters…) -->
+  <script type="text/babel" src="/static/js/components.jsx"></script>
 
-        <div class="modal-actions">
-          <button class="btn btn-secondary" id="btn-cancelar-modal">Cancelar</button>
-          <button class="btn btn-primary" id="btn-crear">Crear</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- 3. Tweaks panel (theme / density / accent) -->
+  <script type="text/babel" src="/static/js/tweaks-panel.jsx"></script>
 
-  <!-- ── Evaluación ────────────────────────────────────────────────────── -->
-  <div id="view-evaluacion" class="view">
-    <div class="page-header row-between">
-      <div>
-        <h1 id="eval-titulo">Evaluación</h1>
-        <p class="subtitle" id="eval-empresa"></p>
-      </div>
-      <div class="header-actions">
-        <div class="progress-badge"><span id="progreso-pct">0%</span><span class="progress-label">completado</span></div>
-        <button class="btn btn-success" id="btn-ver-stats">Ver resultados</button>
-        <button class="btn btn-warning" id="btn-ver-hallazgos">⚠️ Hallazgos</button>
-        <button class="btn btn-info" id="btn-ver-cobertura">🗺️ Cobertura</button>
-        <button class="btn btn-secondary" id="btn-ver-remediacion">📌 Remediación</button>
-        <button class="btn btn-outline" id="btn-pdf">📄 PDF</button>
-        <button class="btn btn-secondary" id="btn-participantes" title="Gestionar participantes">👥</button>
-      </div>
-    </div>
-    <div class="tab-bar" id="tab-bar"></div>
-    <div id="controles-panel"></div>
-  </div>
+  <!-- 4. Screens — core -->
+  <script type="text/babel" src="/static/js/screen-home.jsx"></script>
+  <script type="text/babel" src="/static/js/screen-evaluacion.jsx"></script>
+  <script type="text/babel" src="/static/js/screen-hallazgos.jsx"></script>
+  <script type="text/babel" src="/static/js/screen-resultados.jsx"></script>
+  <script type="text/babel" src="/static/js/screen-cobertura.jsx"></script>
+  <script type="text/babel" src="/static/js/screen-remediacion.jsx"></script>
+  <script type="text/babel" src="/static/js/screen-misc.jsx"></script>
 
-  <!-- ── Modal participantes (gestión post-creación) ─────────────────── -->
-  <div id="modal-participantes" class="modal hidden">
-    <div class="modal-box">
-      <h2>👥 Participantes de la evaluación</h2>
-      <p style="font-size:12px;color:#64748b;margin-bottom:14px;">
-        Los usuarios con rol <b>Auditado</b> solo verán las evaluaciones que les asignés.
-        El resto de los roles siempre ven todas.
-      </p>
-      <div id="participantes-lista" class="participantes-check-list">
-        <div class="participantes-loading">Cargando…</div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" id="btn-cancel-participantes">Cancelar</button>
-        <button class="btn btn-primary" id="btn-save-participantes">Guardar</button>
-      </div>
-    </div>
-  </div>
+  <!-- 4b. Screens — nuevas (GRC avanzado) -->
+  <script type="text/babel" src="/static/js/screen-riesgos.jsx"></script>
+  <script type="text/babel" src="/static/js/screen-soa.jsx"></script>
+  <script type="text/babel" src="/static/js/screen-deadlines.jsx"></script>
 
-  <!-- ── Resultados ────────────────────────────────────────────────────── -->
-  <div id="view-stats" class="view">
-    <div class="page-header row-between">
-      <div>
-        <h1>Resultados — <span id="stats-titulo"></span></h1>
-        <p class="subtitle" id="stats-empresa"></p>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-outline" id="btn-pdf-stats">📄 PDF</button>
-        <button class="btn btn-secondary" id="btn-back-eval">← Evaluación</button>
-      </div>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-card accent-blue"><div class="stat-val" id="stat-madurez">—</div><div class="stat-lbl">Madurez global /5</div></div>
-      <div class="stat-card accent-green"><div class="stat-val" id="stat-respondidos">—</div><div class="stat-lbl">Controles evaluados</div></div>
-      <div class="stat-card accent-orange"><div class="stat-val" id="stat-brechas">—</div><div class="stat-lbl">Brechas identificadas</div></div>
-      <div class="stat-card accent-purple"><div class="stat-val" id="stat-pct">—</div><div class="stat-lbl">% completitud</div></div>
-    </div>
-    <div class="charts-row">
-      <div class="chart-card"><div class="chart-title">Madurez por dominio</div><canvas id="chart-radar"></canvas></div>
-      <div class="chart-card"><div class="chart-title">Distribución por nivel</div><canvas id="chart-bar"></canvas></div>
-    </div>
-    <div class="section-title">Brechas críticas (madurez &lt; 3)</div>
-    <div id="tabla-brechas"></div>
-  </div>
+  <!-- 4c. Screens — seguridad (usuarios + roles + auditoría) -->
+  <script type="text/babel" src="/static/js/screen-seguridad.jsx"></script>
 
-  <!-- ── Hallazgos ─────────────────────────────────────────────────────── -->
-  <div id="view-hallazgos" class="view">
-    <div class="page-header row-between">
-      <div>
-        <h1>Hallazgos de Auditoría</h1>
-        <p class="subtitle" id="hallazgos-empresa"></p>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-secondary" id="btn-back-eval-h">← Evaluación</button>
-      </div>
-    </div>
-
-    <!-- Filtros -->
-    <div class="filtros-bar">
-      <select id="filtro-estado" class="filtro-select">
-        <option value="">Todos los estados</option>
-        <option value="abierto">Abierto</option>
-        <option value="en_proceso">En proceso</option>
-        <option value="resuelto">Resuelto</option>
-        <option value="verificado">Verificado</option>
-      </select>
-      <select id="filtro-severidad" class="filtro-select">
-        <option value="">Todas las severidades</option>
-        <option value="critica">Crítica</option>
-        <option value="alta">Alta</option>
-        <option value="media">Media</option>
-        <option value="baja">Baja</option>
-      </select>
-      <div id="hallazgos-counters" class="counters-row"></div>
-    </div>
-
-    <div id="lista-hallazgos"></div>
-  </div>
-
-  <!-- ── Cobertura Multi-framework ─────────────────────────────────────── -->
-  <div id="view-cobertura" class="view">
-    <div class="page-header row-between">
-      <div>
-        <h1>Cobertura Multi-framework</h1>
-        <p class="subtitle" id="cobertura-empresa">Seleccioná una evaluación para ver la cobertura estimada.</p>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-secondary" id="btn-back-eval-cob">← Evaluación</button>
-      </div>
-    </div>
-
-    <div id="cobertura-sin-eval" class="empty-state">
-      <div class="empty-icon">🗺️</div>
-      <div>Abrí una evaluación ISO 27001 primero para ver cómo se mapea a otros frameworks.</div>
-    </div>
-
-    <div id="cobertura-contenido" class="hidden">
-      <!-- Selector de framework -->
-      <div class="fw-selector">
-        <button class="btn btn-fw active" data-fw="A7777" onclick="seleccionarFramework('A7777')">
-          🏦 BCRA A 7777
-        </button>
-        <button class="btn btn-fw" data-fw="A7783" onclick="seleccionarFramework('A7783')">
-          🏦 BCRA A 7783
-        </button>
-        <button class="btn btn-fw" data-fw="PCI" onclick="seleccionarFramework('PCI')">
-          💳 PCI DSS v4.0
-        </button>
-      </div>
-
-      <!-- Resumen de cobertura -->
-      <div class="cobertura-resumen" id="cobertura-resumen"></div>
-
-      <!-- Tabla de controles por dominio -->
-      <div id="cobertura-dominios"></div>
-    </div>
-  </div>
-
-  <!-- ── Plan de Remediación (Kanban) ─────────────────────────────────── -->
-  <div id="view-remediacion" class="view">
-    <div class="page-header row-between">
-      <div>
-        <h1>Plan de Remediación</h1>
-        <p class="subtitle" id="remediacion-empresa">Abrí una evaluación para ver el plan de remediación.</p>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-secondary" id="btn-back-eval-rem">← Evaluación</button>
-      </div>
-    </div>
-    <div id="rem-stats" class="rem-stats-bar"></div>
-    <div id="kanban-board" class="kanban-board"></div>
-  </div>
-
-  <!-- ── Gestión de Usuarios (admin) ─────────────────────────────────── -->
-  <div id="view-usuarios" class="view">
-    <div class="page-header row-between usuarios-header">
-      <div>
-        <h1>Gestión de Usuarios</h1>
-        <p class="subtitle">Administrá cuentas, roles y accesos al sistema.</p>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-primary" id="btn-nuevo-usuario">+ Nuevo usuario</button>
-      </div>
-    </div>
-    <div id="tabla-usuarios"></div>
-  </div>
-
-  <!-- ── Auditoría ─────────────────────────────────────────────────────── -->
-  <div id="view-auditoria" class="view">
-    <div class="page-header row-between">
-      <div>
-        <h1>Log de Auditoría</h1>
-        <p class="subtitle">Registro inmutable de todas las acciones realizadas en el sistema.</p>
-      </div>
-      <div class="header-actions">
-        <button class="btn btn-secondary" id="btn-refresh-audit">🔄 Actualizar</button>
-      </div>
-    </div>
-    <div class="audit-filters">
-      <select id="audit-filtro-accion" class="filtro-select">
-        <option value="">Todas las acciones</option>
-        <option value="login">Login</option>
-        <option value="login_fallido">Login fallido</option>
-        <option value="logout">Logout</option>
-        <option value="crear_evaluacion">Crear evaluación</option>
-        <option value="eliminar_evaluacion">Eliminar evaluación</option>
-        <option value="crear_hallazgo">Crear hallazgo</option>
-        <option value="subir_evidencia">Subir evidencia</option>
-        <option value="analizar_ia">Analizar con IA</option>
-        <option value="cambiar_estado_hallazgo">Cambiar estado hallazgo</option>
-      </select>
-      <span class="audit-counter" id="audit-counter">—</span>
-    </div>
-    <div id="audit-log-tabla"></div>
-  </div>
-
-</main>
-
-<!-- Modal Hallazgo -->
-<div id="modal-hallazgo" class="modal hidden">
-  <div class="modal-box modal-lg">
-    <h2 id="modal-hallazgo-titulo">Hallazgo de Auditoría</h2>
-    <input type="hidden" id="h-id" />
-    <input type="hidden" id="h-eval-id" />
-    <input type="hidden" id="h-ctrl-id" />
-    <input type="hidden" id="h-ev-id" />
-
-    <div class="form-row">
-      <div class="form-col">
-        <label>Control</label>
-        <input type="text" id="h-control" readonly class="input-readonly" />
-      </div>
-      <div class="form-col">
-        <label>Framework</label>
-        <input type="text" id="h-framework" value="ISO27001" readonly class="input-readonly" />
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-col">
-        <label>Tipo</label>
-        <select id="h-tipo">
-          <option value="no_conformidad">No Conformidad</option>
-          <option value="observacion">Observación</option>
-          <option value="oportunidad">Oportunidad de mejora</option>
-        </select>
-      </div>
-      <div class="form-col">
-        <label>Severidad</label>
-        <select id="h-severidad">
-          <option value="critica">🔴 Crítica</option>
-          <option value="alta">🟠 Alta</option>
-          <option value="media" selected>🟡 Media</option>
-          <option value="baja">🟢 Baja</option>
-        </select>
-      </div>
-      <div class="form-col">
-        <label>Estado</label>
-        <select id="h-estado">
-          <option value="abierto">Abierto</option>
-          <option value="en_proceso">En proceso</option>
-          <option value="resuelto">Resuelto</option>
-          <option value="verificado">Verificado</option>
-        </select>
-      </div>
-    </div>
-
-    <label>Título del hallazgo</label>
-    <input type="text" id="h-titulo" placeholder="Ej: Ausencia de política de control de acceso documentada" />
-
-    <label>Descripción detallada</label>
-    <textarea id="h-descripcion" rows="3" placeholder="Descripción del hallazgo para el informe de auditoría..."></textarea>
-
-    <div class="section-divider">Asignación y plan de acción</div>
-
-    <div class="form-row">
-      <div class="form-col">
-        <label>Responsable</label>
-        <input type="text" id="h-resp-nombre" placeholder="Nombre y apellido" />
-      </div>
-      <div class="form-col">
-        <label>Email</label>
-        <input type="email" id="h-resp-email" placeholder="responsable@empresa.com" />
-      </div>
-      <div class="form-col">
-        <label>Fecha límite</label>
-        <input type="date" id="h-fecha" />
-      </div>
-    </div>
-
-    <label>Plan de acción</label>
-    <textarea id="h-plan" rows="3" placeholder="Describí los pasos concretos para remediar este hallazgo..."></textarea>
-
-    <div class="modal-actions">
-      <button class="btn btn-secondary" id="btn-cancel-hallazgo">Cancelar</button>
-      <button class="btn btn-primary" id="btn-save-hallazgo">Guardar hallazgo</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal Nuevo/Editar Usuario -->
-<div id="modal-usuario" class="modal hidden modal-usuario">
-  <div class="modal-box">
-    <h2 id="modal-usuario-titulo">Nuevo usuario</h2>
-    <input type="hidden" id="u-id" />
-    <div class="form-field">
-      <label>Nombre completo</label>
-      <input type="text" id="u-nombre" placeholder="Ej: María García" />
-    </div>
-    <div class="form-field">
-      <label>Usuario (login)</label>
-      <input type="text" id="u-username" placeholder="Ej: mgarcia" autocomplete="off" />
-    </div>
-    <div class="form-field">
-      <label>Contraseña</label>
-      <input type="password" id="u-password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
-    </div>
-    <div class="form-field">
-      <label>Rol</label>
-      <select id="u-rol">
-        <option value="analista">Analista — gestiona evaluaciones, sube evidencia</option>
-        <option value="auditado">Auditado — solo sube evidencia de sus controles</option>
-        <option value="auditor_externo">Auditor Externo — solo lectura completa</option>
-        <option value="admin">Administrador — acceso total</option>
-      </select>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" id="btn-cancel-usuario">Cancelar</button>
-      <button class="btn btn-primary" id="btn-save-usuario">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<script src="/static/js/app.js"></script>
-<script src="/static/js/hallazgos.js"></script>
-<script src="/static/js/evidencias.js"></script>
-<script src="/static/js/cobertura.js"></script>
-<script src="/static/js/remediacion.js"></script>
-<script src="/static/js/auditlog.js"></script>
-<script src="/static/js/usuarios.js"></script>
+  <!-- 5. App entry point — mounts React tree into #root -->
+  <script type="text/babel" src="/static/js/app.jsx"></script>
 </body>
 </html>

@@ -64,7 +64,37 @@ def get_user_from_token(token: str) -> dict | None:
                  AND u.aprobado = 1""",
             (token,),
         ).fetchone()
-    return dict(row) if row else None
+        if not row:
+            return None
+        user = dict(row)
+        # Cargar permisos del rol (via tabla roles si existe, o sistema por defecto)
+        user["permisos"] = _load_permisos(conn, user["rol"])
+    return user
+
+
+def _load_permisos(conn, rol_nombre: str) -> list:
+    """Retorna la lista de permiso IDs para el rol dado."""
+    try:
+        rows = conn.execute(
+            """SELECT rp.permiso_id FROM rol_permisos rp
+               JOIN roles r ON rp.rol_id = r.id
+               WHERE r.nombre = ?""",
+            (_rol_nombre_sistema(rol_nombre),),
+        ).fetchall()
+        return [r["permiso_id"] for r in rows]
+    except Exception:
+        return []
+
+
+def _rol_nombre_sistema(rol_key: str) -> str:
+    """Mapea el key interno del rol al nombre en la tabla roles."""
+    mapping = {
+        "admin": "Administrador",
+        "analista": "Analista GRC",
+        "auditor_externo": "Auditor Externo",
+        "auditado": "Auditado",
+    }
+    return mapping.get(rol_key, rol_key)
 
 
 def delete_session(token: str) -> None:

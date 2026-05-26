@@ -3,6 +3,7 @@ GRC Tool — servidor principal
 """
 import json
 import os
+import re
 import base64
 import socketserver
 import uuid
@@ -10,15 +11,113 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 
-from database import get_conn, init_db
-from data.controles_iso27001 import CONTROLES, DOMINIOS
+from database import get_conn, init_db, seed_roles_y_permisos
+from data.controles_iso27001 import CONTROLES as CONTROLES_ISO, DOMINIOS as DOMINIOS_ISO
 from data.controles_bcra import CONTROLES_BCRA, DOMINIOS_BCRA, DOMINIOS_A7777, DOMINIOS_A7783
 from data.controles_pci import CONTROLES_PCI, DOMINIOS_PCI
-from report import generar_pdf
+from data.controles_nist_csf import CONTROLES_NIST, DOMINIOS_NIST
+from data.controles_soc2 import CONTROLES_SOC2, DOMINIOS_SOC2
+from data.controles_cis import CONTROLES_CIS, DOMINIOS_CIS
+from report import generar_pdf, generar_informe
 from ai_analyzer import analizar_evidencia
+
+# Backwards compat aliases
+CONTROLES = CONTROLES_ISO
+DOMINIOS  = DOMINIOS_ISO
 
 CONTROLES_A7777 = [c for c in CONTROLES_BCRA if c.get("norma") == "A7777"]
 CONTROLES_A7783 = [c for c in CONTROLES_BCRA if c.get("norma") == "A7783"]
+
+# ── Framework registry ────────────────────────────────────────────────────────
+FRAMEWORK_REGISTRY = {
+    "ISO27001": {
+        "id":       "ISO27001",
+        "label":    "ISO 27001:2022",
+        "controles": CONTROLES_ISO,
+        "dominios":  DOMINIOS_ISO,
+        "n":        len(CONTROLES_ISO),
+    },
+    "NIST_CSF": {
+        "id":       "NIST_CSF",
+        "label":    "NIST CSF 2.0",
+        "controles": CONTROLES_NIST,
+        "dominios":  DOMINIOS_NIST,
+        "n":        len(CONTROLES_NIST),
+    },
+    "SOC2": {
+        "id":       "SOC2",
+        "label":    "SOC 2 (TSC)",
+        "controles": CONTROLES_SOC2,
+        "dominios":  DOMINIOS_SOC2,
+        "n":        len(CONTROLES_SOC2),
+    },
+    "CIS": {
+        "id":       "CIS",
+        "label":    "CIS Controls v8",
+        "controles": CONTROLES_CIS,
+        "dominios":  DOMINIOS_CIS,
+        "n":        len(CONTROLES_CIS),
+    },
+    # Legacy cobertura-only frameworks (no direct eval support)
+    "A7777": {"id":"A7777","label":"BCRA A 7777","controles":CONTROLES_A7777,"dominios":DOMINIOS_A7777,"n":len(CONTROLES_A7777)},
+    "A7783": {"id":"A7783","label":"BCRA A 7783","controles":CONTROLES_A7783,"dominios":DOMINIOS_A7783,"n":len(CONTROLES_A7783)},
+    "BCRA":  {"id":"BCRA", "label":"BCRA",        "controles":CONTROLES_BCRA, "dominios":DOMINIOS_BCRA, "n":len(CONTROLES_BCRA)},
+    "PCI":   {"id":"PCI",  "label":"PCI DSS v4.0","controles":CONTROLES_PCI,  "dominios":DOMINIOS_PCI,  "n":len(CONTROLES_PCI)},
+}
+
+def _rol_key_from_nombre(nombre: str) -> str:
+    """Mapea nombre de rol en tabla roles → key en usuarios.rol."""
+    return {
+        "Administrador":  "admin",
+        "Analista GRC":   "analista",
+        "Auditor Externo":"auditor_externo",
+        "Auditado":       "auditado",
+    }.get(nombre, nombre.lower().replace(" ", "_"))
+
+
+def get_primary_framework(eval_row) -> str:
+    """Return the first selectable framework ID for an evaluation."""
+    try:
+        fws = json.loads(eval_row["frameworks"] or '["ISO27001"]')
+        if fws:
+            return fws[0]
+    except Exception:
+        pass
+    return "ISO27001"
+
+
+def seed_controles_db():
+    """Populate controles_fw table from Python data files (only inserts missing rows)."""
+    with get_conn() as conn:
+        for fw_id, fw in FRAMEWORK_REGISTRY.items():
+            ctrl_list = fw.get("controles", [])
+            for i, c in enumerate(ctrl_list):
+                try:
+                    conn.execute(
+                        """INSERT OR IGNORE INTO controles_fw
+                           (id, framework, nombre, descripcion, dominio, categoria, orden, activo, es_custom)
+                           VALUES (?,?,?,?,?,?,?,1,0)""",
+                        (
+                            c["id"], fw_id,
+                            c.get("nombre") or c.get("name", ""),
+                            c.get("descripcion", ""),
+                            c.get("dominio", ""),
+                            c.get("categoria", c.get("dominio", "")),
+                            i,
+                        ),
+                    )
+                except Exception:
+                    pass
+
+
+def get_controles_db(fw_id: str) -> list:
+    """Return active controls for a framework from the DB."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM controles_fw WHERE framework=? AND activo=1 ORDER BY orden, id",
+            (fw_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 BASE_DIR    = Path(__file__).parent.parent
 STATIC_DIR  = BASE_DIR / "static"
@@ -218,10 +317,10 @@ class Handler(BaseHTTPRequestHandler):
         user = self._get_user()
         if not user:
             if self.path.startswith("/api/"):
-                self.send_json({"error": "No autenticado", "redirect": "/login"}, 401)
+                self.send_json({"error": "No autenticado"}, 401)
             else:
                 self.send_response(302)
-                self.send_header("Location", "/login")
+                self.send_header("Location", "/")
                 self.end_headers()
             return None
         return user
@@ -229,6 +328,16 @@ class Handler(BaseHTTPRequestHandler):
     def _require_admin(self, user):
         if user.get("rol") != "admin":
             self.send_json({"error": "Se requiere rol Administrador."}, 403)
+            return False
+        return True
+
+    def _require_perm(self, user, permiso: str) -> bool:
+        """Chequea permiso granular. Admin siempre tiene acceso total."""
+        if user.get("rol") == "admin":
+            return True
+        perms = user.get("permisos") or []
+        if permiso not in perms:
+            self.send_json({"error": f"Permiso requerido: {permiso}"}, 403)
             return False
         return True
 
@@ -387,26 +496,28 @@ class Handler(BaseHTTPRequestHandler):
         path   = parsed.path
         qs     = parse_qs(parsed.query)
 
-        # ── Rutas siempre públicas ──
-        if path == "/login":
-            self.send_file(STATIC_DIR / "login.html", "text/html; charset=utf-8")
+        # ── Rutas siempre públicas — todas sirven la SPA ──
+        if path in ("/login", "/register", "/forgot-password",
+                    "/reset-password", "/change-password"):
+            # Redirect legacy HTML routes to the React SPA
+            self.send_response(302)
+            self.send_header("Location", "/")
+            self.end_headers()
             return
-        if path == "/register":
-            self.send_file(STATIC_DIR / "register.html", "text/html; charset=utf-8")
-            return
-        if path == "/forgot-password":
-            self.send_file(STATIC_DIR / "forgot-password.html", "text/html; charset=utf-8")
-            return
-        if path == "/reset-password":
-            self.send_file(STATIC_DIR / "reset-password.html", "text/html; charset=utf-8")
-            return
-        if path == "/change-password":
-            self.send_file(STATIC_DIR / "change-password.html", "text/html; charset=utf-8")
+        if path in ("/", "/index.html"):
+            self.send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
             return
         if path.startswith("/static/"):
             rel   = path[len("/static/"):]
             ext   = Path(rel).suffix
-            tipos = {".css": "text/css", ".js": "application/javascript", ".svg": "image/svg+xml"}
+            tipos = {
+                ".css":  "text/css",
+                ".js":   "application/javascript",
+                ".jsx":  "application/javascript",
+                ".svg":  "image/svg+xml",
+                ".woff2":"font/woff2",
+                ".woff": "font/woff",
+            }
             self.send_file(STATIC_DIR / rel, tipos.get(ext, "application/octet-stream"))
             return
 
@@ -415,10 +526,7 @@ class Handler(BaseHTTPRequestHandler):
         if not user:
             return
 
-        if path in ("/", "/index.html"):
-            self.send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
-
-        elif path == "/api/me":
+        if path == "/api/me":
             self.send_json({
                 "id": user["id"], "username": user["username"],
                 "nombre": user["nombre"], "rol": user["rol"],
@@ -428,13 +536,32 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/audit-log":
             if not self._require_audit_access(user):
                 return
-            limit  = int(qs.get("limit",  ["200"])[0])
-            offset = int(qs.get("offset", ["0"])[0])
+            limit       = int(qs.get("limit",       ["500"])[0])
+            offset      = int(qs.get("offset",      ["0"])[0])
+            accion      = qs.get("accion",      [None])[0]
+            usuario     = qs.get("usuario",     [None])[0]
+            fecha_desde = qs.get("fecha_desde", [None])[0]
+            fecha_hasta = qs.get("fecha_hasta", [None])[0]
+
+            where, params = [], []
+            if accion:
+                where.append("accion LIKE ?"); params.append(accion + "%")
+            if usuario:
+                where.append("(usuario_nombre LIKE ? OR usuario_id = ?)"); params += ["%" + usuario + "%", usuario]
+            if fecha_desde:
+                where.append("timestamp >= ?"); params.append(fecha_desde)
+            if fecha_hasta:
+                # include the full day
+                where.append("timestamp < date(?, '+1 day')"); params.append(fecha_hasta)
+
+            sql = "SELECT al.*, u.nombre AS usuario_nombre FROM audit_log al LEFT JOIN usuarios u ON al.usuario_id = u.id"
+            if where:
+                sql += " WHERE " + " AND ".join(where)
+            sql += " ORDER BY al.timestamp DESC LIMIT ? OFFSET ?"
+            params += [limit, offset]
+
             with get_conn() as conn:
-                rows = conn.execute(
-                    "SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ? OFFSET ?",
-                    (limit, offset),
-                ).fetchall()
+                rows = conn.execute(sql, params).fetchall()
             self.send_json([dict(r) for r in rows])
 
         elif path == "/api/usuarios":
@@ -475,10 +602,56 @@ class Handler(BaseHTTPRequestHandler):
                     ).fetchall()
             self.send_json([dict(r) for r in rows])
 
+        elif path.startswith("/api/evaluaciones/") and "/controles" in path:
+            # GET /api/evaluaciones/{id}/controles[?framework=ISO27001]
+            # Returns controls for the primary (or specified) framework merged with responses
+            eid = int(path.split("/")[3])
+            fw_override = qs.get("framework", [None])[0]
+            with get_conn() as conn:
+                ev = conn.execute("SELECT * FROM evaluaciones WHERE id=?", (eid,)).fetchone()
+                if not ev:
+                    self.send_json({"error": "no encontrada"}, 404); return
+                resps = conn.execute(
+                    "SELECT * FROM respuestas WHERE evaluacion_id=?", (eid,)
+                ).fetchall()
+            fw_id = fw_override or get_primary_framework(ev)
+            fw    = FRAMEWORK_REGISTRY.get(fw_id, FRAMEWORK_REGISTRY["ISO27001"])
+            ctrl_list = get_controles_db(fw_id)
+            dominios_map = fw["dominios"]
+            resp_map = {r["control_id"]: dict(r) for r in resps}
+            result = []
+            for c in ctrl_list:
+                r = resp_map.get(c["id"], {})
+                dom = c.get("dominio", "")
+                result.append({
+                    "id":             c["id"],
+                    "nombre":         c.get("nombre", ""),
+                    "dominio":        dom,
+                    "dominio_nombre": dominios_map.get(dom, dom),
+                    "descripcion":    c.get("descripcion", ""),
+                    "categoria":      c.get("categoria", dom),
+                    "madurez":        r.get("madurez", 0) or 0,
+                    "comentario":     r.get("comentario", "") or "",
+                    "aplica":         r.get("aplica", 1) if r else 1,
+                    "excepcion_justificacion": r.get("excepcion_justificacion", ""),
+                    "excepcion_aprobada":      r.get("excepcion_aprobada", 0),
+                    "excepcion_hasta":         r.get("excepcion_hasta", ""),
+                })
+            self.send_json({"controles": result, "framework": fw_id, "framework_label": fw["label"]})
+
         elif path.startswith("/api/evaluaciones/") and "/stats" in path:
             if self._block_auditado(user): return
             eid = int(path.split("/")[3])
             self.send_json(calcular_stats(eid))
+
+        elif path.startswith("/api/evaluaciones/") and path.count("/") == 3 and path.split("/")[3].isdigit():
+            # GET /api/evaluaciones/{id}
+            eid = int(path.split("/")[3])
+            with get_conn() as conn:
+                ev = conn.execute("SELECT * FROM evaluaciones WHERE id=?", (eid,)).fetchone()
+            if not ev:
+                self.send_json({"error": "no encontrada"}, 404); return
+            self.send_json(dict(ev))
 
         elif path.startswith("/api/evaluaciones/") and "/respuestas" in path:
             eid = int(path.split("/")[3])
@@ -526,10 +699,25 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json([dict(r) for r in rows])
 
         elif path == "/api/controles":
-            self.send_json(CONTROLES)
+            self.send_json(CONTROLES_ISO)
 
         elif path == "/api/dominios":
-            self.send_json(DOMINIOS)
+            self.send_json(DOMINIOS_ISO)
+
+        elif path == "/api/frameworks":
+            # Returns the catalogue of all selectable frameworks
+            catalogue = [
+                # ── Frameworks / normas con evaluación directa ──
+                {"id":"ISO27001", "label":"ISO 27001:2022",  "icon":"ShieldCheck", "n":len(CONTROLES_ISO),  "tipo":"framework",   "descripcion":"Gestión de seguridad de la información (ISMS)"},
+                {"id":"NIST_CSF", "label":"NIST CSF 2.0",    "icon":"Shield",       "n":len(CONTROLES_NIST), "tipo":"framework",   "descripcion":"Marco de ciberseguridad del NIST — 6 funciones (Govern, Identify, Protect, Detect, Respond, Recover)"},
+                {"id":"SOC2",     "label":"SOC 2 (TSC)",      "icon":"Lock",         "n":len(CONTROLES_SOC2), "tipo":"framework",   "descripcion":"Trust Services Criteria del AICPA — Seguridad, Disponibilidad, Integridad, Confidencialidad, Privacidad"},
+                {"id":"CIS",      "label":"CIS Controls v8",  "icon":"CheckSquare",  "n":len(CONTROLES_CIS),  "tipo":"framework",   "descripcion":"Centro para la Seguridad en Internet — 18 controles, IG1/IG2/IG3"},
+                {"id":"PCI",      "label":"PCI DSS v4.0",     "icon":"CreditCard",   "n":len(CONTROLES_PCI),  "tipo":"framework",   "descripcion":"Estándar de seguridad para la industria de tarjetas de pago"},
+                # ── Normativa regulatoria obligatoria (sin evaluación directa) ──
+                {"id":"A7777",    "label":"Com. A 7777",      "icon":"Building",     "n":len(CONTROLES_A7777),"tipo":"regulacion",  "descripcion":"Gestión de riesgos de TI — Normativa obligatoria Banco Central de la Rep. Argentina"},
+                {"id":"A7783",    "label":"Com. A 7783",      "icon":"Building",     "n":len(CONTROLES_A7783),"tipo":"regulacion",  "descripcion":"Gestión de incidentes de TI — Normativa obligatoria Banco Central de la Rep. Argentina"},
+            ]
+            self.send_json(catalogue)
 
         elif path == "/api/frameworks/bcra/controles":
             self.send_json(CONTROLES_BCRA)
@@ -547,6 +735,46 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(CONTROLES_PCI)
         elif path == "/api/frameworks/pci/dominios":
             self.send_json(DOMINIOS_PCI)
+        elif path == "/api/frameworks/nist_csf/controles":
+            self.send_json(CONTROLES_NIST)
+        elif path == "/api/frameworks/nist_csf/dominios":
+            self.send_json(DOMINIOS_NIST)
+        elif path == "/api/frameworks/soc2/controles":
+            self.send_json(CONTROLES_SOC2)
+        elif path == "/api/frameworks/soc2/dominios":
+            self.send_json(DOMINIOS_SOC2)
+        elif path == "/api/frameworks/cis/controles":
+            self.send_json(CONTROLES_CIS)
+        elif path == "/api/frameworks/cis/dominios":
+            self.send_json(DOMINIOS_CIS)
+
+        # ── Admin: ABM de controles por framework ──────────────────────────────
+        elif path.startswith("/api/admin/frameworks/") and path.endswith("/controles"):
+            if not self._require_admin(user): return
+            fw_id = path.split("/")[4].upper()
+            q        = qs.get("q", [""])[0].lower()
+            page     = int(qs.get("page", ["1"])[0])
+            per_page = int(qs.get("per_page", ["50"])[0])
+            offset   = (page - 1) * per_page
+            with get_conn() as conn:
+                base_q = "FROM controles_fw WHERE framework=?"
+                params = [fw_id]
+                if q:
+                    base_q += " AND (lower(id) LIKE ? OR lower(nombre) LIKE ? OR lower(dominio) LIKE ?)"
+                    params += [f"%{q}%", f"%{q}%", f"%{q}%"]
+                total = conn.execute(f"SELECT COUNT(*) {base_q}", params).fetchone()[0]
+                rows  = conn.execute(
+                    f"SELECT * {base_q} ORDER BY activo DESC, orden, id LIMIT ? OFFSET ?",
+                    params + [per_page, offset],
+                ).fetchall()
+            fw_meta = FRAMEWORK_REGISTRY.get(fw_id, {})
+            dominios_map = fw_meta.get("dominios", {})
+            result = []
+            for r in rows:
+                d = dict(r)
+                d["dominio_nombre"] = dominios_map.get(d["dominio"], d["dominio"])
+                result.append(d)
+            self.send_json({"controles": result, "total": total, "page": page, "per_page": per_page})
 
         elif path.startswith("/api/evaluaciones/") and "/cobertura/" in path:
             if self._block_auditado(user): return
@@ -559,22 +787,219 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(calcular_cobertura(eid, fw))
 
         elif path.startswith("/api/report/"):
-            if self._block_auditado(user): return
-            eid = int(path.split("/")[3])
+            if not self._require_perm(user, "reportes.generar"): return
+            parts = path.split("/")   # ['', 'api', 'report', '{eid}']
+            eid   = int(parts[3])
+            tipo  = qs.get("tipo",      ["ejecutivo"])[0]   # ejecutivo | detallado
+            fw_id = qs.get("framework", ["ISO27001"])[0]
             with get_conn() as conn:
                 ev = conn.execute("SELECT * FROM evaluaciones WHERE id=?", (eid,)).fetchone()
+                hallazgos_rows = conn.execute(
+                    "SELECT * FROM hallazgos WHERE evaluacion_id=? AND framework=? ORDER BY severidad DESC",
+                    (eid, fw_id)
+                ).fetchall()
+                riesgos_rows = conn.execute(
+                    "SELECT r.*, u.nombre AS propietario_nombre FROM riesgos r "
+                    "LEFT JOIN usuarios u ON r.propietario_id = u.id "
+                    "WHERE r.evaluacion_id=? ORDER BY (r.probabilidad*r.impacto) DESC",
+                    (eid,)
+                ).fetchall()
             if not ev:
                 self.send_json({"error": "no encontrada"}, 404)
                 return
-            stats    = calcular_stats(eid)
-            pdf_path = generar_pdf(dict(ev), stats, CONTROLES)
+            stats     = calcular_stats(eid)
+            controles = get_controles_db(fw_id)
+            # Enriquecer controles con respuestas
+            with get_conn() as conn:
+                resp_rows = conn.execute(
+                    "SELECT * FROM respuestas WHERE evaluacion_id=?", (eid,)
+                ).fetchall()
+            resp_map = {r["control_id"]: dict(r) for r in resp_rows}
+            for c in controles:
+                r = resp_map.get(c["id"], {})
+                c["madurez"]    = r.get("madurez")
+                c["comentario"] = r.get("comentario","")
+                c["aplica"]     = r.get("aplica", 1)
+
+            hallazgos = [dict(h) for h in hallazgos_rows]
+            riesgos   = [dict(r) for r in riesgos_rows]
+
+            pdf_path = generar_informe(dict(ev), stats, controles, fw_id, tipo, hallazgos, riesgos)
             data     = pdf_path.read_bytes()
+            fname    = f"{tipo}-{fw_id}-{eid}.pdf"
             self.send_response(200)
             self.send_header("Content-Type", "application/pdf")
-            self.send_header("Content-Disposition", f'attachment; filename="gap-analysis-{eid}.pdf"')
+            self.send_header("Content-Disposition", f'attachment; filename="{fname}"')
             self.send_header("Content-Length", len(data))
             self.end_headers()
             self.wfile.write(data)
+
+        # ── Riesgos ──
+        elif path.startswith("/api/evaluaciones/") and "/riesgos" in path and path.count("/") == 4:
+            if self._block_auditado(user): return
+            eid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT r.*, u.nombre AS propietario_nombre
+                       FROM riesgos r
+                       LEFT JOIN usuarios u ON r.propietario_id = u.id
+                       WHERE r.evaluacion_id = ?
+                       ORDER BY (r.probabilidad * r.impacto) DESC, r.creado_en DESC""",
+                    (eid,)
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        elif path.startswith("/api/riesgos/") and path.count("/") == 3:
+            if self._block_auditado(user): return
+            rid = int(path.split("/")[3])
+            with get_conn() as conn:
+                row = conn.execute(
+                    "SELECT r.*, u.nombre AS propietario_nombre FROM riesgos r "
+                    "LEFT JOIN usuarios u ON r.propietario_id = u.id WHERE r.id=?", (rid,)
+                ).fetchone()
+            if not row: self.send_json({"error": "no encontrado"}, 404); return
+            self.send_json(dict(row))
+
+        # ── Tareas de un hallazgo ──
+        elif path.startswith("/api/hallazgos/") and "/tareas" in path:
+            if self._block_auditado(user): return
+            hid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT t.*, u.nombre AS asignado_nombre, u.email AS asignado_email
+                       FROM tareas t LEFT JOIN usuarios u ON t.asignado_a = u.id
+                       WHERE t.hallazgo_id = ? ORDER BY t.creado_en DESC""",
+                    (hid,)
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        # ── Deadlines de evidencia ──
+        elif path.startswith("/api/evaluaciones/") and "/deadlines" in path:
+            eid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT d.*, u.nombre AS asignado_nombre, u.email AS asignado_email
+                       FROM deadlines_evidencia d
+                       LEFT JOIN usuarios u ON d.asignado_a = u.id
+                       WHERE d.evaluacion_id = ?
+                       ORDER BY d.fecha_limite ASC""",
+                    (eid,)
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        # ── Historial de madurez ──
+        elif path.startswith("/api/evaluaciones/") and "/historial-madurez" in path:
+            if self._block_auditado(user): return
+            eid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM historial_madurez WHERE evaluacion_id=? ORDER BY registrado_en ASC",
+                    (eid,)
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        # ── Comparar evaluaciones ──
+        elif path.startswith("/api/evaluaciones/") and "/comparar" in path:
+            if self._block_auditado(user): return
+            eid1 = int(path.split("/")[3])
+            eid2 = int(qs.get("con", [0])[0]) if qs.get("con") else None
+            if not eid2:
+                self.send_json({"error": "Parámetro 'con' requerido"}, 400); return
+            with get_conn() as conn:
+                r1 = conn.execute("SELECT control_id, madurez FROM respuestas WHERE evaluacion_id=?", (eid1,)).fetchall()
+                r2 = conn.execute("SELECT control_id, madurez FROM respuestas WHERE evaluacion_id=?", (eid2,)).fetchall()
+                ev1 = conn.execute("SELECT nombre FROM evaluaciones WHERE id=?", (eid1,)).fetchone()
+                ev2 = conn.execute("SELECT nombre FROM evaluaciones WHERE id=?", (eid2,)).fetchone()
+            m1 = {r["control_id"]: r["madurez"] for r in r1}
+            m2 = {r["control_id"]: r["madurez"] for r in r2}
+            todos = set(m1) | set(m2)
+            delta = []
+            for cid in todos:
+                v1, v2 = m1.get(cid, 0), m2.get(cid, 0)
+                if v1 != v2:
+                    ctrl = get_control(cid)
+                    delta.append({
+                        "control_id": cid,
+                        "nombre": ctrl["nombre"] if ctrl else cid,
+                        "dominio": ctrl["dominio"] if ctrl else "",
+                        "eval1": v1, "eval2": v2, "delta": v2 - v1,
+                    })
+            delta.sort(key=lambda x: abs(x["delta"]), reverse=True)
+            self.send_json({
+                "eval1": {"id": eid1, "nombre": ev1["nombre"] if ev1 else str(eid1)},
+                "eval2": {"id": eid2, "nombre": ev2["nombre"] if ev2 else str(eid2)},
+                "delta": delta,
+                "resumen": {
+                    "mejoraron": len([d for d in delta if d["delta"] > 0]),
+                    "empeoraron": len([d for d in delta if d["delta"] < 0]),
+                    "sin_cambio": len(todos) - len(delta),
+                }
+            })
+
+        # ── Catálogo de permisos ──
+        elif path == "/api/admin/permisos":
+            if not self._require_admin(user): return
+            with get_conn() as conn:
+                rows = conn.execute("SELECT * FROM permisos ORDER BY categoria, id").fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        # ── Roles: lista ──
+        elif path == "/api/admin/roles":
+            if not self._require_admin(user): return
+            with get_conn() as conn:
+                roles = conn.execute("SELECT * FROM roles ORDER BY es_sistema DESC, nombre").fetchall()
+                result = []
+                for r in roles:
+                    rd = dict(r)
+                    rd["n_usuarios"] = conn.execute(
+                        "SELECT COUNT(*) FROM usuarios WHERE rol=?",
+                        (_rol_key_from_nombre(rd["nombre"]),)
+                    ).fetchone()[0]
+                    perms = conn.execute(
+                        "SELECT permiso_id FROM rol_permisos WHERE rol_id=?", (rd["id"],)
+                    ).fetchall()
+                    rd["permisos"] = [p["permiso_id"] for p in perms]
+                    result.append(rd)
+            self.send_json(result)
+
+        # ── Rol: detalle ──
+        elif path.startswith("/api/admin/roles/") and path.count("/") == 4:
+            if not self._require_admin(user): return
+            rid = int(path.split("/")[4])
+            with get_conn() as conn:
+                rol = conn.execute("SELECT * FROM roles WHERE id=?", (rid,)).fetchone()
+                if not rol:
+                    self.send_json({"error": "Rol no encontrado"}, 404); return
+                perms = conn.execute(
+                    "SELECT permiso_id FROM rol_permisos WHERE rol_id=?", (rid,)
+                ).fetchall()
+                rd = dict(rol)
+                rd["permisos"] = [p["permiso_id"] for p in perms]
+            self.send_json(rd)
+
+        # ── Config sistema ──
+        elif path == "/api/admin/config":
+            if not self._require_admin(user): return
+            with get_conn() as conn:
+                rows = conn.execute("SELECT clave, valor FROM config_sistema").fetchall()
+            self.send_json({r["clave"]: r["valor"] for r in rows})
+
+        # ── Forzar chequeo de recordatorios ──
+        elif path == "/api/admin/reminders/check":
+            if not self._require_admin(user): return
+            from reminders import check_and_send_reminders
+            base_url = f"http://{self.headers.get('Host', 'localhost:8090')}"
+            result = check_and_send_reminders(base_url)
+            self.send_json(result)
+
+        # ── Hallazgos globales (sin filtro de eval) ──
+        elif path == "/api/hallazgos":
+            if self._block_auditado(user): return
+            with get_conn() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM hallazgos ORDER BY creado_en DESC LIMIT 200"
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
 
         else:
             self.send_response(404)
@@ -709,8 +1134,12 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_write(user):
                 return
             fws = body.get("frameworks", ["ISO27001"])
+            if not fws or not isinstance(fws, list):
+                self.send_json({"error": "Seleccioná al menos un framework."}, 400); return
+            # Validate all requested frameworks exist
+            fws = [f for f in fws if f in FRAMEWORK_REGISTRY]
             if not fws:
-                fws = ["ISO27001"]
+                self.send_json({"error": "Ningún framework válido seleccionado."}, 400); return
             with get_conn() as conn:
                 cur = conn.execute(
                     "INSERT INTO evaluaciones (nombre, empresa, alcance, frameworks) VALUES (?,?,?,?)",
@@ -836,6 +1265,242 @@ class Handler(BaseHTTPRequestHandler):
                        "hallazgo", hid, body.get("titulo", ""), self._ip())
             self.send_json({"id": hid})
 
+        # ── Riesgos — crear / actualizar ──
+        elif path.startswith("/api/evaluaciones/") and "/riesgos" in path and path.count("/") == 4:
+            if not self._require_write(user): return
+            eid = int(path.split("/")[3])
+            with get_conn() as conn:
+                cur = conn.execute(
+                    """INSERT INTO riesgos
+                       (evaluacion_id, control_id, descripcion, probabilidad, impacto,
+                        tratamiento, propietario_id, riesgo_residual, estado, notas)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (eid, body.get("control_id",""), body.get("descripcion","Sin descripción"),
+                     int(body.get("probabilidad", 3)), int(body.get("impacto", 3)),
+                     body.get("tratamiento","mitigar"), body.get("propietario_id"),
+                     int(body.get("probabilidad",3)) * int(body.get("impacto",3)),
+                     body.get("estado","abierto"), body.get("notas","")),
+                )
+                rid = cur.lastrowid
+            log_action(user["id"], user["username"], "crear_riesgo", "riesgo", rid,
+                       body.get("descripcion","")[:80], self._ip())
+            self.send_json({"id": rid})
+
+        elif path.startswith("/api/riesgos/") and path.count("/") == 3:
+            if not self._require_write(user): return
+            rid = int(path.split("/")[3])
+            campos = ["descripcion","probabilidad","impacto","tratamiento",
+                      "propietario_id","riesgo_residual","estado","notas","control_id"]
+            sets = ", ".join(f"{c}=?" for c in campos if c in body)
+            vals = [body[c] for c in campos if c in body]
+            if sets:
+                # Recalcular riesgo_residual si cambian prob/impacto
+                prob = body.get("probabilidad")
+                imp  = body.get("impacto")
+                if prob and imp and "riesgo_residual" not in body:
+                    sets += ", riesgo_residual=?"; vals.append(int(prob)*int(imp))
+                vals.append(rid)
+                with get_conn() as conn:
+                    conn.execute(f"UPDATE riesgos SET {sets}, actualizado_en=datetime('now') WHERE id=?", vals)
+            self.send_json({"ok": True})
+
+        # ── Tareas ──
+        elif path.startswith("/api/hallazgos/") and "/tareas" in path and path.count("/") == 4:
+            if not self._require_write(user): return
+            hid = int(path.split("/")[3])
+            with get_conn() as conn:
+                cur = conn.execute(
+                    """INSERT INTO tareas (hallazgo_id, titulo, descripcion, asignado_a, fecha_limite, estado, progreso)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (hid, body.get("titulo","Tarea"), body.get("descripcion",""),
+                     body.get("asignado_a"), body.get("fecha_limite",""),
+                     body.get("estado","pendiente"), int(body.get("progreso",0))),
+                )
+                tid = cur.lastrowid
+            log_action(user["id"], user["username"], "crear_tarea", "tarea", tid,
+                       body.get("titulo","")[:80], self._ip())
+            self.send_json({"id": tid})
+
+        elif path.startswith("/api/tareas/") and path.count("/") == 3:
+            if not self._require_write(user): return
+            tid = int(path.split("/")[3])
+            campos = ["titulo","descripcion","asignado_a","fecha_limite","estado","progreso"]
+            sets = ", ".join(f"{c}=?" for c in campos if c in body)
+            vals = [body[c] for c in campos if c in body]
+            if sets:
+                vals.append(tid)
+                with get_conn() as conn:
+                    conn.execute(f"UPDATE tareas SET {sets}, actualizado_en=datetime('now') WHERE id=?", vals)
+            self.send_json({"ok": True})
+
+        # ── Deadlines de evidencia ──
+        elif path.startswith("/api/evaluaciones/") and "/deadlines" in path and path.count("/") == 4:
+            if not self._require_write(user): return
+            eid = int(path.split("/")[3])
+            ctrl_id    = body.get("control_id","")
+            asignado_a = body.get("asignado_a")
+            fecha      = body.get("fecha_limite","")
+            dias_rec   = int(body.get("recordatorio_dias", 3))
+            if not ctrl_id or not asignado_a or not fecha:
+                self.send_json({"error": "control_id, asignado_a y fecha_limite son requeridos"}, 400); return
+            with get_conn() as conn:
+                conn.execute(
+                    """INSERT INTO deadlines_evidencia
+                       (evaluacion_id, control_id, asignado_a, fecha_limite, recordatorio_dias)
+                       VALUES (?,?,?,?,?)
+                       ON CONFLICT(evaluacion_id, control_id, asignado_a)
+                       DO UPDATE SET fecha_limite=excluded.fecha_limite,
+                                     recordatorio_dias=excluded.recordatorio_dias,
+                                     notificado=0""",
+                    (eid, ctrl_id, asignado_a, fecha, dias_rec)
+                )
+                # Notificar inmediatamente si el email está configurado
+                u_row = conn.execute("SELECT nombre, email FROM usuarios WHERE id=?", (asignado_a,)).fetchone()
+                ev_row = conn.execute("SELECT nombre FROM evaluaciones WHERE id=?", (eid,)).fetchone()
+            log_action(user["id"], user["username"], "crear_deadline", "deadline", 0,
+                       f"ctrl={ctrl_id} asignado={asignado_a} fecha={fecha}", self._ip())
+            self.send_json({"ok": True})
+
+        # ── Aprobar/verificar hallazgo ──
+        elif path.startswith("/api/hallazgos/") and "/aprobar" in path:
+            hid    = int(path.split("/")[3])
+            accion = body.get("accion", "aprobar")  # aprobar | verificar | rechazar
+            if accion == "verificar" and user.get("rol") not in ("admin", "auditor_externo"):
+                self.send_json({"error": "Solo auditores externos pueden verificar hallazgos."}, 403); return
+            if accion in ("aprobar","rechazar") and user.get("rol") not in ("admin","analista"):
+                self.send_json({"error": "Solo admin o analista pueden aprobar/rechazar."}, 403); return
+            mapa = {"aprobar": "resuelto", "verificar": "verificado", "rechazar": "abierto"}
+            nuevo_estado = mapa.get(accion, "resuelto")
+            with get_conn() as conn:
+                if accion == "verificar":
+                    conn.execute(
+                        "UPDATE hallazgos SET estado=?, verificado_por=?, fecha_aprobacion=datetime('now') WHERE id=?",
+                        (nuevo_estado, user["id"], hid)
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE hallazgos SET estado=?, aprobado_por=?, fecha_aprobacion=datetime('now') WHERE id=?",
+                        (nuevo_estado, user["id"], hid)
+                    )
+            log_action(user["id"], user["username"], f"hallazgo_{accion}", "hallazgo", hid,
+                       body.get("comentario",""), self._ip())
+            self.send_json({"ok": True, "estado": nuevo_estado})
+
+        # ── Guardar excepción de control (no aplica + justificación) ──
+        elif path.startswith("/api/evaluaciones/") and "/excepcion" in path:
+            if not self._require_write(user): return
+            eid = int(path.split("/")[3])
+            ctrl_id   = body.get("control_id","")
+            justif    = body.get("justificacion","")
+            aprobada  = int(body.get("aprobada", 0))
+            hasta     = body.get("excepcion_hasta","")
+            with get_conn() as conn:
+                conn.execute(
+                    """INSERT INTO respuestas (evaluacion_id, control_id, aplica, excepcion_justificacion,
+                       excepcion_aprobada, excepcion_hasta)
+                       VALUES (?,?,0,?,?,?)
+                       ON CONFLICT(evaluacion_id, control_id)
+                       DO UPDATE SET aplica=0, excepcion_justificacion=excluded.excepcion_justificacion,
+                                     excepcion_aprobada=excluded.excepcion_aprobada,
+                                     excepcion_hasta=excluded.excepcion_hasta""",
+                    (eid, ctrl_id, justif, aprobada, hasta)
+                )
+            log_action(user["id"], user["username"], "excepcion_control", "control", ctrl_id,
+                       f"eval={eid} justif={justif[:50]}", self._ip())
+            self.send_json({"ok": True})
+
+        # ── Registrar snapshot de madurez ──
+        elif path.startswith("/api/evaluaciones/") and "/snapshot-madurez" in path:
+            if not self._require_write(user): return
+            eid = int(path.split("/")[3])
+            with get_conn() as conn:
+                resps = conn.execute(
+                    "SELECT control_id, madurez FROM respuestas WHERE evaluacion_id=? AND madurez > 0",
+                    (eid,)
+                ).fetchall()
+                for r in resps:
+                    conn.execute(
+                        "INSERT INTO historial_madurez (evaluacion_id, control_id, madurez) VALUES (?,?,?)",
+                        (eid, r["control_id"], r["madurez"])
+                    )
+            self.send_json({"ok": True, "snapshots": len(resps)})
+
+        # ── Config sistema (admin) ──
+        elif path == "/api/admin/config":
+            if not self._require_admin(user): return
+            for clave, valor in body.items():
+                if clave.startswith("smtp_") or clave in ("base_url","app_name"):
+                    with get_conn() as conn:
+                        conn.execute(
+                            "INSERT OR REPLACE INTO config_sistema (clave, valor) VALUES (?,?)",
+                            (clave, str(valor))
+                        )
+                    # También actualiza variables de entorno en memoria
+                    env_key = f"GRC_{clave.upper()}"
+                    os.environ[env_key] = str(valor)
+            self.send_json({"ok": True})
+
+        # ── Forzar envío de recordatorios ──
+        elif path == "/api/admin/reminders/send":
+            if not self._require_admin(user): return
+            from reminders import check_and_send_reminders
+            base_url = f"http://{self.headers.get('Host', 'localhost:8090')}"
+            result = check_and_send_reminders(base_url)
+            self.send_json(result)
+
+        # ── Roles: crear ──────────────────────────────────────────────────────
+        elif path == "/api/admin/roles":
+            if not self._require_admin(user): return
+            nombre = body.get("nombre", "").strip()
+            if not nombre:
+                self.send_json({"error": "El nombre del rol es requerido."}, 400); return
+            with get_conn() as conn:
+                if conn.execute("SELECT 1 FROM roles WHERE nombre=?", (nombre,)).fetchone():
+                    self.send_json({"error": "Ya existe un rol con ese nombre."}, 409); return
+                cur = conn.execute(
+                    "INSERT INTO roles (nombre, descripcion, color, es_sistema) VALUES (?,?,?,0)",
+                    (nombre, body.get("descripcion",""), body.get("color","#6366f1")),
+                )
+                rid = cur.lastrowid
+                permisos = body.get("permisos", [])
+                for pid in permisos:
+                    conn.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) VALUES (?,?)", (rid, pid))
+            from auth import log_action
+            log_action(user["id"], user["username"], "crear_rol", "roles", rid, nombre, self._ip())
+            self.send_json({"ok": True, "id": rid})
+
+        # ── Admin: crear control en framework ──────────────────────────────────
+        elif path.startswith("/api/admin/frameworks/") and path.endswith("/controles"):
+            if not self._require_admin(user): return
+            fw_id = path.split("/")[4].upper()
+            if fw_id not in FRAMEWORK_REGISTRY:
+                self.send_json({"error": "Framework no encontrado"}, 404); return
+            ctrl_id  = body.get("id", "").strip()
+            nombre   = body.get("nombre", "").strip()
+            if not ctrl_id or not nombre:
+                self.send_json({"error": "ID y nombre son requeridos."}, 400); return
+            with get_conn() as conn:
+                existing = conn.execute(
+                    "SELECT 1 FROM controles_fw WHERE id=? AND framework=?", (ctrl_id, fw_id)
+                ).fetchone()
+                if existing:
+                    self.send_json({"error": "Ya existe un control con ese ID en este framework."}, 409); return
+                max_orden = conn.execute(
+                    "SELECT COALESCE(MAX(orden),0) FROM controles_fw WHERE framework=?", (fw_id,)
+                ).fetchone()[0]
+                conn.execute(
+                    """INSERT INTO controles_fw (id, framework, nombre, descripcion, dominio, categoria, orden, activo, es_custom)
+                       VALUES (?,?,?,?,?,?,?,1,1)""",
+                    (ctrl_id, fw_id, nombre,
+                     body.get("descripcion", ""), body.get("dominio", ""),
+                     body.get("categoria", body.get("dominio", "")),
+                     max_orden + 1),
+                )
+            from auth import log_action
+            log_action(user["id"], user["username"], "crear_control", "controles_fw",
+                       f"{fw_id}:{ctrl_id}", nombre, self._ip())
+            self.send_json({"ok": True, "id": ctrl_id})
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -904,6 +1569,50 @@ class Handler(BaseHTTPRequestHandler):
                     conn.execute(f"UPDATE usuarios SET {sets} WHERE id=?", vals)
             self.send_json({"ok": True})
 
+        # ── Roles: actualizar (nombre/desc/color) o asignar permisos ─────────
+        elif path.startswith("/api/admin/roles/"):
+            if not self._require_admin(user): return
+            parts = path.split("/")
+            rid = int(parts[4])
+            with get_conn() as conn:
+                rol = conn.execute("SELECT * FROM roles WHERE id=?", (rid,)).fetchone()
+                if not rol: self.send_json({"error": "Rol no encontrado"}, 404); return
+                if len(parts) == 6 and parts[5] == "permisos":
+                    nuevos = body.get("permisos", [])
+                    conn.execute("DELETE FROM rol_permisos WHERE rol_id=?", (rid,))
+                    for pid in nuevos:
+                        conn.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) VALUES (?,?)", (rid, pid))
+                else:
+                    if rol["es_sistema"] and "nombre" in body:
+                        self.send_json({"error": "No se puede cambiar el nombre de roles del sistema."}, 400); return
+                    for campo in ["nombre", "descripcion", "color"]:
+                        if campo in body:
+                            conn.execute(f"UPDATE roles SET {campo}=? WHERE id=?", (body[campo], rid))
+            self.send_json({"ok": True})
+
+        # ── Admin: actualizar control de framework ─────────────────────────────
+        elif path.startswith("/api/admin/frameworks/") and "/controles/" in path:
+            if not self._require_admin(user): return
+            parts  = path.split("/")
+            fw_id  = parts[4].upper()
+            ctrl_id = "/".join(parts[6:])  # support IDs with slashes (e.g. NIST)
+            if not ctrl_id:
+                self.send_json({"error": "ID de control requerido."}, 400); return
+            allowed = ["nombre", "descripcion", "dominio", "categoria", "activo", "orden"]
+            sets  = ", ".join(f"{k}=?" for k in allowed if k in body)
+            vals  = [body[k] for k in allowed if k in body]
+            if sets:
+                vals += [fw_id, ctrl_id]
+                with get_conn() as conn:
+                    conn.execute(
+                        f"UPDATE controles_fw SET {sets}, actualizado_en=datetime('now') "
+                        "WHERE framework=? AND id=?", vals
+                    )
+            from auth import log_action
+            log_action(user["id"], user["username"], "editar_control", "controles_fw",
+                       f"{fw_id}:{ctrl_id}", "", self._ip())
+            self.send_json({"ok": True})
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -968,6 +1677,28 @@ class Handler(BaseHTTPRequestHandler):
                 )
             self.send_json({"ok": True})
 
+        elif "/riesgos/" in path:
+            if not self._require_write(user): return
+            rid = int(path.split("/")[-1])
+            with get_conn() as conn:
+                conn.execute("DELETE FROM riesgos WHERE id=?", (rid,))
+            log_action(user["id"], user["username"], "eliminar_riesgo", "riesgo", rid, ip=self._ip())
+            self.send_json({"ok": True})
+
+        elif "/tareas/" in path:
+            if not self._require_write(user): return
+            tid = int(path.split("/")[-1])
+            with get_conn() as conn:
+                conn.execute("DELETE FROM tareas WHERE id=?", (tid,))
+            self.send_json({"ok": True})
+
+        elif "/deadlines/" in path:
+            if not self._require_write(user): return
+            did = int(path.split("/")[-1])
+            with get_conn() as conn:
+                conn.execute("DELETE FROM deadlines_evidencia WHERE id=?", (did,))
+            self.send_json({"ok": True})
+
         elif "/usuarios/" in path:
             uid = int(path.split("/")[-1])
             if not self._require_admin(user):
@@ -977,6 +1708,54 @@ class Handler(BaseHTTPRequestHandler):
                 return
             with get_conn() as conn:
                 conn.execute("DELETE FROM usuarios WHERE id=?", (uid,))
+            self.send_json({"ok": True})
+
+        # ── Roles: eliminar ────────────────────────────────────────────────────
+        elif path.startswith("/api/admin/roles/"):
+            if not self._require_admin(user): return
+            rid = int(path.split("/")[4])
+            with get_conn() as conn:
+                rol = conn.execute("SELECT * FROM roles WHERE id=?", (rid,)).fetchone()
+                if not rol: self.send_json({"error": "Rol no encontrado"}, 404); return
+                if rol["es_sistema"]:
+                    self.send_json({"error": "No se pueden eliminar roles del sistema."}, 400); return
+                n_usuarios = conn.execute(
+                    "SELECT COUNT(*) FROM usuarios WHERE rol=?",
+                    (_rol_key_from_nombre(rol["nombre"]),)
+                ).fetchone()[0]
+                if n_usuarios > 0:
+                    self.send_json({"error": f"El rol tiene {n_usuarios} usuario(s) asignado(s). Reasignalos antes de eliminar."}, 400); return
+                conn.execute("DELETE FROM roles WHERE id=?", (rid,))
+            from auth import log_action
+            log_action(user["id"], user["username"], "eliminar_rol", "roles", rid, rol["nombre"], self._ip())
+            self.send_json({"ok": True})
+
+        # ── Admin: eliminar control de framework ───────────────────────────────
+        elif path.startswith("/api/admin/frameworks/") and "/controles/" in path:
+            if not self._require_admin(user): return
+            parts   = path.split("/")
+            fw_id   = parts[4].upper()
+            ctrl_id = "/".join(parts[6:])
+            qs_del  = parse_qs(urlparse(self.path).query)
+            hard    = qs_del.get("hard", ["0"])[0] == "1"
+            with get_conn() as conn:
+                row = conn.execute(
+                    "SELECT es_custom FROM controles_fw WHERE framework=? AND id=?", (fw_id, ctrl_id)
+                ).fetchone()
+                if not row:
+                    self.send_json({"error": "Control no encontrado."}, 404); return
+                if hard and row["es_custom"]:
+                    conn.execute("DELETE FROM controles_fw WHERE framework=? AND id=?", (fw_id, ctrl_id))
+                else:
+                    # Soft-delete (toggle activo)
+                    new_activo = 0 if row else 1
+                    conn.execute(
+                        "UPDATE controles_fw SET activo=?, actualizado_en=datetime('now') WHERE framework=? AND id=?",
+                        (new_activo, fw_id, ctrl_id),
+                    )
+            from auth import log_action
+            log_action(user["id"], user["username"], "eliminar_control", "controles_fw",
+                       f"{fw_id}:{ctrl_id}", "", self._ip())
             self.send_json({"ok": True})
 
         else:
@@ -990,8 +1769,13 @@ class ThreadingServer(socketserver.ThreadingMixIn, HTTPServer):
 
 def main():
     init_db()
+    seed_roles_y_permisos()
+    seed_controles_db()
     from auth import init_default_users
     init_default_users()
+    from reminders import start_reminder_thread
+    base_url = os.environ.get("GRC_BASE_URL", "http://localhost:8090")
+    start_reminder_thread(base_url=base_url, interval_seconds=3600)
     port = 8090
     print(f"GRC Tool — http://localhost:{port}")
     print(f"Usuario por defecto: admin / Admin1234!")

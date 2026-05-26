@@ -140,13 +140,113 @@ def _migrate():
         "ALTER TABLE usuarios ADD COLUMN email TEXT DEFAULT ''",
         "ALTER TABLE usuarios ADD COLUMN aprobado INTEGER DEFAULT 1",
         "ALTER TABLE usuarios ADD COLUMN debe_cambiar_password INTEGER DEFAULT 0",
+        # v2 — riesgos, SoA, deadlines, tareas, historial
+        "ALTER TABLE hallazgos ADD COLUMN aprobado_por INTEGER REFERENCES usuarios(id)",
+        "ALTER TABLE hallazgos ADD COLUMN fecha_aprobacion TEXT",
+        "ALTER TABLE hallazgos ADD COLUMN verificado_por INTEGER REFERENCES usuarios(id)",
+        "ALTER TABLE respuestas ADD COLUMN excepcion_justificacion TEXT DEFAULT ''",
+        "ALTER TABLE respuestas ADD COLUMN excepcion_aprobada INTEGER DEFAULT 0",
+        "ALTER TABLE respuestas ADD COLUMN excepcion_hasta TEXT DEFAULT ''",
     ]
+    new_tables = """
+        CREATE TABLE IF NOT EXISTS riesgos (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            evaluacion_id   INTEGER NOT NULL REFERENCES evaluaciones(id) ON DELETE CASCADE,
+            control_id      TEXT DEFAULT '',
+            descripcion     TEXT NOT NULL,
+            probabilidad    INTEGER DEFAULT 3,
+            impacto         INTEGER DEFAULT 3,
+            tratamiento     TEXT DEFAULT 'mitigar',
+            propietario_id  INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            riesgo_residual INTEGER DEFAULT 9,
+            estado          TEXT DEFAULT 'abierto',
+            notas           TEXT DEFAULT '',
+            creado_en       TEXT DEFAULT (datetime('now')),
+            actualizado_en  TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS tareas (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            hallazgo_id   INTEGER NOT NULL REFERENCES hallazgos(id) ON DELETE CASCADE,
+            titulo        TEXT NOT NULL,
+            descripcion   TEXT DEFAULT '',
+            asignado_a    INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            fecha_limite  TEXT DEFAULT '',
+            estado        TEXT DEFAULT 'pendiente',
+            progreso      INTEGER DEFAULT 0,
+            creado_en     TEXT DEFAULT (datetime('now')),
+            actualizado_en TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS deadlines_evidencia (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            evaluacion_id     INTEGER NOT NULL REFERENCES evaluaciones(id) ON DELETE CASCADE,
+            control_id        TEXT NOT NULL,
+            asignado_a        INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+            fecha_limite      TEXT NOT NULL,
+            recordatorio_dias INTEGER DEFAULT 3,
+            notificado        INTEGER DEFAULT 0,
+            creado_en         TEXT DEFAULT (datetime('now')),
+            UNIQUE(evaluacion_id, control_id, asignado_a)
+        );
+
+        CREATE TABLE IF NOT EXISTS historial_madurez (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            evaluacion_id INTEGER NOT NULL REFERENCES evaluaciones(id) ON DELETE CASCADE,
+            control_id    TEXT NOT NULL,
+            madurez       REAL DEFAULT 0,
+            registrado_en TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS config_sistema (
+            clave TEXT PRIMARY KEY,
+            valor TEXT DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS controles_fw (
+            id             TEXT NOT NULL,
+            framework      TEXT NOT NULL,
+            nombre         TEXT NOT NULL,
+            descripcion    TEXT DEFAULT '',
+            dominio        TEXT DEFAULT '',
+            categoria      TEXT DEFAULT '',
+            orden          INTEGER DEFAULT 0,
+            activo         INTEGER DEFAULT 1,
+            es_custom      INTEGER DEFAULT 0,
+            creado_en      TEXT DEFAULT (datetime('now')),
+            actualizado_en TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (id, framework)
+        );
+
+        CREATE TABLE IF NOT EXISTS roles (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre      TEXT NOT NULL UNIQUE,
+            descripcion TEXT DEFAULT '',
+            color       TEXT DEFAULT '#6366f1',
+            es_sistema  INTEGER DEFAULT 0,
+            creado_en   TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS permisos (
+            id          TEXT PRIMARY KEY,
+            label       TEXT NOT NULL,
+            descripcion TEXT DEFAULT '',
+            categoria   TEXT DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS rol_permisos (
+            rol_id     INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+            permiso_id TEXT    NOT NULL REFERENCES permisos(id) ON DELETE CASCADE,
+            PRIMARY KEY (rol_id, permiso_id)
+        );
+    """
     with get_conn() as conn:
         for sql in migrations:
             try:
                 conn.execute(sql)
             except Exception:
                 pass  # columna ya existe
+        conn.executescript(new_tables)
 
         # Si el admin aún tiene la contraseña por defecto y no tiene el flag,
         # activarlo para que se le pida el cambio en el próximo login.
@@ -157,3 +257,97 @@ def _migrate():
             conn.execute(
                 "UPDATE usuarios SET debe_cambiar_password = 1 WHERE username = 'admin'"
             )
+
+
+# ── Catálogo de permisos y roles sistema ──────────────────────────────────────
+
+PERMISOS_CATALOGO = [
+    # Evaluaciones
+    ("eval.ver",            "Ver evaluaciones",              "Ver y acceder a evaluaciones existentes",                     "Evaluaciones"),
+    ("eval.crear",          "Crear evaluaciones",            "Crear nuevas evaluaciones y configurar frameworks",           "Evaluaciones"),
+    ("eval.responder",      "Completar controles",           "Responder y actualizar el nivel de madurez de controles",     "Evaluaciones"),
+    ("eval.eliminar",       "Eliminar evaluaciones",         "Eliminar evaluaciones y todos sus datos asociados",           "Evaluaciones"),
+    # Hallazgos
+    ("hallazgos.ver",       "Ver hallazgos",                 "Consultar el registro de hallazgos y no conformidades",       "Hallazgos"),
+    ("hallazgos.gestionar", "Gestionar hallazgos",           "Crear, editar y cambiar estado de hallazgos",                 "Hallazgos"),
+    ("hallazgos.aprobar",   "Aprobar hallazgos",             "Aprobar y verificar resolución de hallazgos",                 "Hallazgos"),
+    # Riesgos
+    ("riesgos.ver",         "Ver riesgos",                   "Consultar el registro de riesgos del SGSI",                   "Riesgos"),
+    ("riesgos.gestionar",   "Gestionar riesgos",             "Crear, editar y actualizar tratamiento de riesgos",           "Riesgos"),
+    # Remediación
+    ("remediacion.ver",     "Ver remediación",               "Consultar el plan de remediación y tareas asociadas",         "Remediación"),
+    ("remediacion.gestionar","Gestionar remediación",        "Crear y actualizar tareas del plan de remediación",           "Remediación"),
+    # Evidencias
+    ("evidencias.ver",      "Ver evidencias",                "Consultar evidencias subidas a los controles",                "Evidencias"),
+    ("evidencias.subir",    "Subir evidencias",              "Cargar archivos de evidencia para los controles",             "Evidencias"),
+    # Reportes
+    ("reportes.generar",    "Generar reportes",              "Exportar informes ejecutivos y detallados en PDF",            "Reportes"),
+    # Administración
+    ("usuarios.ver",        "Ver usuarios",                  "Consultar la lista de usuarios de la plataforma",             "Administración"),
+    ("usuarios.gestionar",  "Gestionar usuarios",            "Crear, editar y eliminar cuentas de usuario",                 "Administración"),
+    ("roles.gestionar",     "Gestionar roles y permisos",    "Crear roles custom y asignar permisos granulares",            "Administración"),
+    ("auditoria.ver",       "Ver auditoría",                 "Acceder al log de auditoría inmutable",                       "Administración"),
+    # Configuración
+    ("config.sistema",      "Configurar sistema",            "Modificar parámetros generales y SMTP",                       "Configuración"),
+    ("config.seguridad",    "Configurar seguridad",          "Gestionar parámetros de seguridad de la plataforma",          "Configuración"),
+    ("frameworks.gestionar","Gestionar frameworks",          "Editar, agregar y desactivar controles de cada framework",    "Configuración"),
+]
+
+# Permisos por rol sistema
+PERMISOS_POR_ROL = {
+    "admin": [p[0] for p in PERMISOS_CATALOGO],  # todos
+    "analista": [
+        "eval.ver", "eval.crear", "eval.responder",
+        "hallazgos.ver", "hallazgos.gestionar",
+        "riesgos.ver", "riesgos.gestionar",
+        "remediacion.ver", "remediacion.gestionar",
+        "evidencias.ver", "evidencias.subir",
+        "reportes.generar",
+        "usuarios.ver",
+    ],
+    "auditor_externo": [
+        "eval.ver",
+        "hallazgos.ver",
+        "riesgos.ver",
+        "remediacion.ver",
+        "evidencias.ver",
+        "auditoria.ver",
+        "reportes.generar",
+    ],
+    "auditado": [
+        "eval.ver", "eval.responder",
+        "evidencias.subir", "evidencias.ver",
+    ],
+}
+
+ROLES_SISTEMA = [
+    ("admin",           "Administrador",     "Acceso total al sistema",                                      "#ef4444"),
+    ("analista",        "Analista GRC",      "Gestión completa de evaluaciones, hallazgos y riesgos",        "#3b82f6"),
+    ("auditor_externo", "Auditor Externo",   "Acceso de solo lectura para revisión independiente",           "#8b5cf6"),
+    ("auditado",        "Auditado",          "Carga de evidencias y respuesta a controles asignados",        "#10b981"),
+]
+
+
+def seed_roles_y_permisos():
+    """Inserta el catálogo de permisos y los roles sistema si no existen."""
+    with get_conn() as conn:
+        # Permisos
+        for pid, label, desc, cat in PERMISOS_CATALOGO:
+            conn.execute(
+                "INSERT OR IGNORE INTO permisos (id, label, descripcion, categoria) VALUES (?,?,?,?)",
+                (pid, label, desc, cat),
+            )
+        # Roles sistema
+        for rol_key, nombre, desc, color in ROLES_SISTEMA:
+            conn.execute(
+                "INSERT OR IGNORE INTO roles (nombre, descripcion, color, es_sistema) VALUES (?,?,?,1)",
+                (nombre, desc, color),
+            )
+            rol_row = conn.execute("SELECT id FROM roles WHERE nombre=?", (nombre,)).fetchone()
+            if rol_row:
+                rid = rol_row["id"]
+                for pid in PERMISOS_POR_ROL.get(rol_key, []):
+                    conn.execute(
+                        "INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) VALUES (?,?)",
+                        (rid, pid),
+                    )
