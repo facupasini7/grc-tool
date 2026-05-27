@@ -738,7 +738,7 @@ class Handler(BaseHTTPRequestHandler):
                 {"id":"PCI",      "label":"PCI DSS v4.0",     "icon":"CreditCard",   "n":len(CONTROLES_PCI),  "tipo":"framework",   "descripcion":"Estándar de seguridad para la industria de tarjetas de pago"},
                 # ── Normativa regulatoria obligatoria (sin evaluación directa) ──
                 {"id":"A7777",    "label":"Com. A 7777",      "icon":"Building",     "n":len(CONTROLES_A7777),"tipo":"regulacion",  "descripcion":"Requisitos mínimos para la gestión y control de los riesgos de TI y SI — BCRA (obligatoria)"},
-                {"id":"A7783",    "label":"Com. A 7783",      "icon":"Building",     "n":len(CONTROLES_A7783),"tipo":"regulacion",  "descripcion":"Gestión de incidentes de TI — Normativa obligatoria Banco Central de la Rep. Argentina"},
+                {"id":"A7783",    "label":"Com. A 7783",      "icon":"Building",     "n":len(CONTROLES_A7783),"tipo":"regulacion",  "descripcion":"Requisitos mínimos para la gestión y control de los riesgos de TI y SI asociados a los servicios financieros digitales — BCRA (obligatoria)"},
             ]
             self.send_json(catalogue)
 

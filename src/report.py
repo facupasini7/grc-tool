@@ -32,7 +32,7 @@ FRAMEWORK_LABELS = {
     "SOC2":        "SOC 2 Type II",
     "CIS":         "CIS Controls v8",
     "A7777":       "BCRA Com. A 7777 — Requisitos mínimos para la gestión y control de los riesgos de TI y SI",
-    "A7783":       "BCRA Com. A 7783 — Servicios Financieros Digitales",
+    "A7783":       "BCRA Com. A 7783 — Requisitos mínimos para la gestión y control de los riesgos de TI y SI asociados a los servicios financieros digitales",
     "BCRA":        "BCRA Com. A 7777/7783",
     "PCI":         "PCI DSS v4.0",
 }

@@ -35,7 +35,7 @@ A lightweight, self-hosted **GRC (Governance, Risk & Compliance)** platform for 
 | `SOC2` | SOC 2 Type II — 57 controls |
 | `CIS` | CIS Controls v8 — 153 controls |
 | `A7777` | BCRA Com. A 7777 — Requisitos mínimos para la gestión y control de los riesgos de TI y SI (46 controles) |
-| `A7783` | BCRA Com. A 7783 — Servicios Financieros Digitales (9 controles) |
+| `A7783` | BCRA Com. A 7783 — Requisitos mínimos para la gestión y control de los riesgos de TI y SI asociados a los servicios financieros digitales (9 controles) |
 | `BCRA` | BCRA Com. A 7777 + A 7783 — 55 controles |
 | `PCI` | PCI DSS v4.0 — 61 controls |
 
