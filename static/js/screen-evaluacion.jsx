@@ -273,8 +273,8 @@ const fmtDateTime = (s) => {
   return d.toLocaleString("es-AR", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
 };
 
-const ROLE_SHORT = { admin:"Adm", analista:"Analista GRC", auditado:"Auditado", auditor_externo:"Auditor" };
-const ROLE_COLOR = { admin:"var(--accent)", analista:"#10b981", auditado:"#f59e0b", auditor_externo:"#6366f1" };
+const ROLE_SHORT = { admin:"Adm", analista:"Analista GRC", auditado:"Auditado", auditor_externo:"Auditor", ia:"IA Local" };
+const ROLE_COLOR = { admin:"var(--accent)", analista:"#10b981", auditado:"#f59e0b", auditor_externo:"#6366f1", ia:"#a855f7" };
 
 function initials(nombre) {
   return (nombre || "?").split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
@@ -337,7 +337,7 @@ function DiscusionThread({ evalId, ctrlId }) {
                       {!isLast && <div style={{ position:"absolute", left:14, top:30, bottom:0, width:2, background:"var(--border)" }}/>}
                       {/* Avatar */}
                       <div style={{ flexShrink:0, width:28, height:28, borderRadius:"50%", background:color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff", zIndex:1 }}>
-                        {initials(nombre)}
+                        {rol === "ia" ? <Icon.Cpu size={14}/> : initials(nombre)}
                       </div>
                       {/* Burbuja */}
                       <div style={{ flex:1, minWidth:0 }}>

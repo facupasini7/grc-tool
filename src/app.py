@@ -1251,7 +1251,8 @@ class Handler(BaseHTTPRequestHandler):
             # ── Auto-análisis IA en background ──────────────────────────────
             import threading as _threading
             def _bg_analyze(eid=eid, ctrl_id=ctrl_id, ev_id=ev_id,
-                             filepath=str(filepath), ext=ext, framework=framework):
+                             filepath=str(filepath), ext=ext, framework=framework,
+                             filename=safe_filename):
                 try:
                     with get_conn() as conn:
                         ctrl_row = conn.execute(
@@ -1277,6 +1278,40 @@ class Handler(BaseHTTPRequestHandler):
                     except (TypeError, ValueError):
                         madurez_ia = None
                     comentario_ia = resultado.get("resumen", "")
+
+                    # Etiquetas CMMI/COBIT 2019 (espejo de MATURITY_LEVELS en components.jsx)
+                    cmmi = {
+                        0: "Incompleto — No existe / no implementado",
+                        1: "Inicial — Ad-hoc y reactivo. Sin proceso definido",
+                        2: "Gestionado — Repetible pero informal",
+                        3: "Definido — Documentado y estandarizado",
+                        4: "Cuantitativo — Con KPIs y métricas",
+                        5: "Optimizado — Mejora continua basada en datos",
+                    }
+                    veredicto_lbl = {
+                        "cumple":    "Cumple",
+                        "parcial":   "Cumple con observaciones",
+                        "no_cumple": "No cumple",
+                        "pendiente": "Pendiente",
+                    }.get(veredicto, veredicto)
+
+                    if madurez_ia is not None:
+                        nivel_txt = cmmi.get(madurez_ia, str(madurez_ia))
+                        texto_ia  = (
+                            f"Análisis automático de la evidencia '{filename}'.\n\n"
+                            f"{comentario_ia}\n\n"
+                            f"→ Veredicto de la evidencia: {veredicto_lbl}\n"
+                            f"→ Madurez sugerida: {madurez_ia}/5 — {nivel_txt}\n\n"
+                            f"Pendiente de revisión y confirmación por el analista GRC."
+                        )
+                    else:
+                        texto_ia = (
+                            f"Análisis automático de la evidencia '{filename}'.\n\n"
+                            f"{comentario_ia}\n\n"
+                            f"→ Veredicto de la evidencia: {veredicto_lbl}\n"
+                            f"No se pudo sugerir un nivel de madurez con esta evidencia."
+                        )
+
                     with get_conn() as conn:
                         conn.execute(
                             "UPDATE evidencias SET analisis_ia=?, veredicto=? WHERE id=?",
@@ -1294,6 +1329,13 @@ class Handler(BaseHTTPRequestHandler):
                                        ia_pendiente_confirmacion=1""",
                                 (eid, ctrl_id, madurez_ia, comentario_ia),
                             )
+                        # Comentario automático en el thread de discusión
+                        conn.execute(
+                            """INSERT INTO comentarios
+                               (evaluacion_id, control_id, usuario_id, usuario_nombre, usuario_rol, texto)
+                               VALUES (?,?,NULL,?,?,?)""",
+                            (eid, ctrl_id, "IA Local", "ia", texto_ia),
+                        )
                 except Exception:
                     pass
             _threading.Thread(target=_bg_analyze, daemon=True).start()
