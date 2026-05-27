@@ -119,10 +119,12 @@ def get_controles_db(fw_id: str) -> list:
         ).fetchall()
     return [dict(r) for r in rows]
 
-BASE_DIR    = Path(__file__).parent.parent
-STATIC_DIR  = BASE_DIR / "static"
-UPLOADS_DIR = BASE_DIR / "uploads"
+BASE_DIR     = Path(__file__).parent.parent
+STATIC_DIR   = BASE_DIR / "static"
+UPLOADS_DIR  = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
+
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 
 EXTENSIONES_VALIDAS = {
     ".pdf", ".docx", ".doc", ".txt", ".md", ".csv", ".json", ".xml",
@@ -636,6 +638,10 @@ class Handler(BaseHTTPRequestHandler):
                     "excepcion_justificacion": r.get("excepcion_justificacion", ""),
                     "excepcion_aprobada":      r.get("excepcion_aprobada", 0),
                     "excepcion_hasta":         r.get("excepcion_hasta", ""),
+                    # IA suggestion fields
+                    "ia_madurez_sugerida":        r.get("ia_madurez_sugerida") if r else None,
+                    "ia_comentario":              r.get("ia_comentario", "") if r else "",
+                    "ia_pendiente_confirmacion":  r.get("ia_pendiente_confirmacion", 0) if r else 0,
                 })
             self.send_json({"controles": result, "framework": fw_id, "framework_label": fw["label"]})
 
@@ -1111,8 +1117,13 @@ class Handler(BaseHTTPRequestHandler):
             from auth import hash_password
             username = body.get("username", "").strip()
             password = body.get("password", "")
+            nombre   = body.get("nombre", "").strip()
+            email    = body.get("email", "").strip()
             if not username or not password:
                 self.send_json({"error": "username y password son requeridos"}, 400)
+                return
+            if len(password) < 8:
+                self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
                 return
             rol_nuevo = body.get("rol", "analista")
             if rol_nuevo not in ("admin", "analista", "auditor_externo", "auditado"):
@@ -1120,8 +1131,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 with get_conn() as conn:
                     cur = conn.execute(
-                        "INSERT INTO usuarios (username, password_hash, nombre, rol) VALUES (?,?,?,?)",
-                        (username, hash_password(password), body.get("nombre", ""), rol_nuevo),
+                        """INSERT INTO usuarios
+                           (username, password_hash, nombre, email, rol, aprobado, activo, debe_cambiar_password)
+                           VALUES (?,?,?,?,?,1,1,1)""",
+                        (username, hash_password(password), nombre, email, rol_nuevo),
                     )
                 log_action(user["id"], user["username"], "crear_usuario",
                            "usuario", cur.lastrowid, f"username={username} rol={rol_nuevo}", self._ip())
@@ -1173,25 +1186,37 @@ class Handler(BaseHTTPRequestHandler):
                 conn.execute("UPDATE evaluaciones SET actualizada=datetime('now') WHERE id=?", (eid,))
             self.send_json({"ok": True})
 
-        # ── Subir evidencia (base64) ──
-        elif path.startswith("/api/evaluaciones/") and "/evidencias" in path and "analizar" not in path:
+        # ── Subir evidencia (base64 JSON) ──
+        elif path.startswith("/api/evaluaciones/") and "/evidencias" in path and "analizar" not in path and "confirmar" not in path:
             if not self._require_evidence_upload(user):
                 return
-            eid      = int(path.split("/")[3])
-            ctrl_id  = body.get("control_id", "")
-            filename = body.get("filename", "archivo")
-            data_b64 = body.get("data", "")
+            eid       = int(path.split("/")[3])
+            ctrl_id   = body.get("control_id", "")
+            filename  = body.get("filename", "archivo")
+            data_b64  = body.get("data", "")
             framework = body.get("framework", "ISO27001")
 
-            ext = Path(filename).suffix.lower()
+            # Sanitise filename — keep only safe characters
+            safe_filename = re.sub(r'[^\w.\-]', '_', Path(filename).name)
+            ext = Path(safe_filename).suffix.lower()
             if ext not in EXTENSIONES_VALIDAS:
                 self.send_json({"error": f"Extensión no soportada: {ext}"}, 400)
+                return
+
+            # Decode & validate size
+            try:
+                file_bytes = base64.b64decode(data_b64)
+            except Exception as e:
+                self.send_json({"error": f"Datos de archivo inválidos: {e}"}, 400)
+                return
+            if len(file_bytes) > MAX_UPLOAD_BYTES:
+                self.send_json({"error": "El archivo supera el límite de 20 MB."}, 400)
                 return
 
             safe_name = f"{uuid.uuid4().hex}{ext}"
             filepath  = UPLOADS_DIR / safe_name
             try:
-                filepath.write_bytes(base64.b64decode(data_b64))
+                filepath.write_bytes(file_bytes)
             except Exception as e:
                 self.send_json({"error": f"No se pudo guardar: {e}"}, 500)
                 return
@@ -1200,12 +1225,104 @@ class Handler(BaseHTTPRequestHandler):
                 cur = conn.execute(
                     """INSERT INTO evidencias (evaluacion_id, control_id, framework, filename, filepath, filetype)
                        VALUES (?,?,?,?,?,?)""",
-                    (eid, ctrl_id, framework, filename, str(filepath), ext),
+                    (eid, ctrl_id, framework, safe_filename, str(filepath), ext),
                 )
                 ev_id = cur.lastrowid
             log_action(user["id"], user["username"], "subir_evidencia",
-                       "evidencia", ev_id, f"{ctrl_id} — {filename}", self._ip())
-            self.send_json({"id": ev_id, "filename": filename})
+                       "evidencia", ev_id, f"{ctrl_id} — {safe_filename}", self._ip())
+
+            # ── Auto-análisis IA en background ──────────────────────────────
+            import threading as _threading
+            def _bg_analyze(eid=eid, ctrl_id=ctrl_id, ev_id=ev_id,
+                             filepath=str(filepath), ext=ext, framework=framework):
+                try:
+                    with get_conn() as conn:
+                        ctrl_row = conn.execute(
+                            "SELECT * FROM controles_fw WHERE id=? AND framework=?",
+                            (ctrl_id, framework),
+                        ).fetchone()
+                    if not ctrl_row:
+                        return
+                    ctrl_row = dict(ctrl_row)
+                    resultado = analizar_evidencia(
+                        filepath=filepath,
+                        filetype=ext,
+                        control_id=ctrl_row["id"],
+                        control_nombre=ctrl_row["nombre"],
+                        control_descripcion=ctrl_row.get("descripcion", ""),
+                    )
+                    veredicto    = resultado.get("veredicto", "pendiente")
+                    analisis_str = json.dumps(resultado, ensure_ascii=False)
+                    # Validate suggested maturity — must be int 0-5
+                    raw_mad = resultado.get("madurez_sugerida")
+                    try:
+                        madurez_ia = max(0, min(5, int(raw_mad))) if raw_mad is not None else None
+                    except (TypeError, ValueError):
+                        madurez_ia = None
+                    comentario_ia = resultado.get("resumen", "")
+                    with get_conn() as conn:
+                        conn.execute(
+                            "UPDATE evidencias SET analisis_ia=?, veredicto=? WHERE id=?",
+                            (analisis_str, veredicto, ev_id),
+                        )
+                        if madurez_ia is not None:
+                            conn.execute(
+                                """INSERT INTO respuestas
+                                   (evaluacion_id, control_id, madurez, comentario, aplica,
+                                    ia_madurez_sugerida, ia_comentario, ia_pendiente_confirmacion)
+                                   VALUES (?,?,0,'',1,?,?,1)
+                                   ON CONFLICT(evaluacion_id, control_id) DO UPDATE SET
+                                       ia_madurez_sugerida=excluded.ia_madurez_sugerida,
+                                       ia_comentario=excluded.ia_comentario,
+                                       ia_pendiente_confirmacion=1""",
+                                (eid, ctrl_id, madurez_ia, comentario_ia),
+                            )
+                except Exception:
+                    pass
+            _threading.Thread(target=_bg_analyze, daemon=True).start()
+            # ────────────────────────────────────────────────────────────────
+
+            self.send_json({"id": ev_id, "filename": safe_filename})
+
+        # ── Confirmar / rechazar sugerencia de IA ──
+        elif path.startswith("/api/evaluaciones/") and "/controles/" in path and path.endswith("/confirmar-ia"):
+            # POST /api/evaluaciones/{eid}/controles/{ctrl_id}/confirmar-ia
+            if not self._require_perm(user, "eval.responder"):
+                return
+            parts   = path.split("/")
+            eid     = int(parts[3])
+            ctrl_id = "/".join(parts[5:-1])  # supports IDs with dots/slashes
+            confirmar = body.get("confirmar", True)
+            with get_conn() as conn:
+                if confirmar:
+                    row = conn.execute(
+                        "SELECT ia_madurez_sugerida, ia_comentario FROM respuestas "
+                        "WHERE evaluacion_id=? AND control_id=?",
+                        (eid, ctrl_id),
+                    ).fetchone()
+                    if row and row["ia_madurez_sugerida"] is not None:
+                        conn.execute(
+                            """UPDATE respuestas
+                               SET madurez=?, comentario=?, ia_pendiente_confirmacion=0
+                               WHERE evaluacion_id=? AND control_id=?""",
+                            (row["ia_madurez_sugerida"], row["ia_comentario"] or "", eid, ctrl_id),
+                        )
+                    else:
+                        conn.execute(
+                            "UPDATE respuestas SET ia_pendiente_confirmacion=0 "
+                            "WHERE evaluacion_id=? AND control_id=?",
+                            (eid, ctrl_id),
+                        )
+                else:
+                    conn.execute(
+                        "UPDATE respuestas SET ia_pendiente_confirmacion=0 "
+                        "WHERE evaluacion_id=? AND control_id=?",
+                        (eid, ctrl_id),
+                    )
+            log_action(user["id"], user["username"],
+                       "confirmar_ia" if confirmar else "rechazar_ia",
+                       "respuesta", ctrl_id, f"eval={eid}", self._ip())
+            self.send_json({"ok": True})
 
         # ── Analizar evidencia con IA ──
         elif "/evidencias/" in path and path.endswith("/analizar"):
@@ -1448,6 +1565,39 @@ class Handler(BaseHTTPRequestHandler):
             result = check_and_send_reminders(base_url)
             self.send_json(result)
 
+        # ── Test de conexión SMTP ──
+        elif path == "/api/admin/config/test-smtp":
+            if not self._require_admin(user): return
+            from reminders import send_email, smtp_configured
+            if not smtp_configured():
+                self.send_json({"error": "SMTP no configurado. Guardá primero el host SMTP."}, 400)
+                return
+            # Determine destination: body.to, user email, or smtp_user
+            to_addr = (body.get("to") or "").strip()
+            if not to_addr:
+                with get_conn() as conn:
+                    row = conn.execute(
+                        "SELECT email FROM usuarios WHERE id=?", (user["id"],)
+                    ).fetchone()
+                    to_addr = (row["email"] if row else "") or os.environ.get("GRC_SMTP_USER", "")
+            if not to_addr:
+                self.send_json({"error": "No hay dirección destino. Configurá tu email de usuario o smtp_user."}, 400)
+                return
+            ok = send_email(
+                to=to_addr,
+                subject="[NormaLab GRC] Prueba de conexión SMTP ✓",
+                html="<div style='font-family:system-ui,sans-serif;padding:24px'>"
+                     "<h2 style='color:#4f46e5'>NormaLab GRC</h2>"
+                     "<p>¡La configuración SMTP funciona correctamente!</p>"
+                     "<p style='color:#888;font-size:12px'>Este es un email de prueba generado desde el panel de configuración.</p>"
+                     "</div>",
+                plain="NormaLab GRC — La configuración SMTP funciona correctamente.",
+            )
+            if ok:
+                self.send_json({"ok": True, "to": to_addr})
+            else:
+                self.send_json({"error": "Error al enviar. Verificá host, puerto, usuario y contraseña SMTP."}, 500)
+
         # ── Roles: crear ──────────────────────────────────────────────────────
         elif path == "/api/admin/roles":
             if not self._require_admin(user): return
@@ -1556,7 +1706,7 @@ class Handler(BaseHTTPRequestHandler):
             uid = int(path.split("/")[-1])
             if not self._require_admin(user):
                 return
-            campos = ["nombre", "rol", "activo"]
+            campos = ["nombre", "email", "rol", "activo"]
             # Validar rol si viene en el body
             if "rol" in body and body["rol"] not in ("admin", "analista", "auditor_externo", "auditado"):
                 self.send_json({"error": "Rol inválido."}, 400)
@@ -1567,6 +1717,18 @@ class Handler(BaseHTTPRequestHandler):
                 vals.append(uid)
                 with get_conn() as conn:
                     conn.execute(f"UPDATE usuarios SET {sets} WHERE id=?", vals)
+            # Cambiar contraseña si se incluye en el body
+            if "password" in body and body["password"]:
+                new_pw = body["password"]
+                if len(new_pw) < 8:
+                    self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+                    return
+                from auth import hash_password
+                with get_conn() as conn:
+                    conn.execute(
+                        "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0 WHERE id=?",
+                        (hash_password(new_pw), uid),
+                    )
             self.send_json({"ok": True})
 
         # ── Roles: actualizar (nombre/desc/color) o asignar permisos ─────────

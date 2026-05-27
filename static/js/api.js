@@ -12,8 +12,8 @@ window.API = (() => {
 
   return {
     /* Auth */
-    me()           { return get("/api/me"); },
-    login(u, p)    {
+    me()             { return get("/api/me"); },
+    login(u, p)      {
       return fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -21,6 +21,7 @@ window.API = (() => {
         credentials: "include",
       }).then(r => r.json());
     },
+    register(d)      { return post("/api/register", d); },
     logout()         { return post("/api/logout", {}); },
     changePass(o, n) { return post("/api/change-password", { old_password: o, new_password: n }); },
 
@@ -70,6 +71,10 @@ window.API = (() => {
     evidencias(evalId, ctrlId)        { return get(`/api/evaluaciones/${evalId}/evidencias${ctrlId ? "?control_id=" + ctrlId : ""}`); },
     subirEvidencia(evalId, ctrlId, d) { return post(`/api/evaluaciones/${evalId}/evidencias`, { ...d, control_id: ctrlId }); },
     eliminarEvidencia(evalId, evId)   { return del(`/api/evaluaciones/${evalId}/evidencias/${evId}`); },
+    /* IA — confirmar / rechazar sugerencia */
+    confirmarIa(evalId, ctrlId, confirmar) {
+      return post(`/api/evaluaciones/${evalId}/controles/${encodeURIComponent(ctrlId)}/confirmar-ia`, { confirmar });
+    },
 
     /* Cobertura */
     cobertura(evalId) { return get(`/api/evaluaciones/${evalId}/cobertura`); },
@@ -87,7 +92,7 @@ window.API = (() => {
     /* Usuarios */
     usuarios()               { return get("/api/usuarios"); },
     crearUsuario(d)          { return post("/api/usuarios", d); },
-    actualizarUsuario(id, d) { return post(`/api/usuarios/${id}`, d); },
+    actualizarUsuario(id, d) { return put(`/api/usuarios/${id}`, d); },
 
     /* Participantes */
     participantes()                     { return get("/api/participantes"); },
@@ -98,6 +103,7 @@ window.API = (() => {
     configSistema()       { return get("/api/admin/config"); },
     guardarConfig(d)      { return post("/api/admin/config", d); },
     enviarRecordatorios() { return post("/api/admin/reminders/send", {}); },
+    testSmtp(to)          { return post("/api/admin/config/test-smtp", to ? { to } : {}); },
 
     /* Admin — ABM controles por framework */
     adminControles(fw, params) {

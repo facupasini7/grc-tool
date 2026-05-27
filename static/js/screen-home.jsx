@@ -5,13 +5,27 @@ const { useState: useStateH, useEffect: useEffectH } = React;
 
 // ── Login Screen ──────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
+  const [mode,    setMode]    = useStateH("login"); // "login" | "register" | "forgot"
   const [user,    setUser]    = useStateH("admin");
   const [pass,    setPass]    = useStateH("");
   const [showP,   setShowP]   = useStateH(false);
   const [err,     setErr]     = useStateH("");
   const [loading, setLoading] = useStateH(false);
 
-  const submit = async (e) => {
+  // Register fields
+  const [regNombre,   setRegNombre]   = useStateH("");
+  const [regUsername, setRegUsername] = useStateH("");
+  const [regEmail,    setRegEmail]    = useStateH("");
+  const [regPass,     setRegPass]     = useStateH("");
+  const [regOk,       setRegOk]       = useStateH(false);
+
+  // Forgot-password fields
+  const [fgIdentifier, setFgIdentifier] = useStateH("");
+  const [fgResult,     setFgResult]     = useStateH(null);
+
+  const goMode = (m) => { setErr(""); setMode(m); };
+
+  const submitLogin = async (e) => {
     e.preventDefault();
     setErr(""); setLoading(true);
     try {
@@ -22,50 +36,84 @@ function LoginScreen({ onLogin }) {
     finally  { setLoading(false); }
   };
 
-  return (
+  const submitRegister = async (e) => {
+    e.preventDefault();
+    setErr(""); setLoading(true);
+    try {
+      const uname = regUsername.trim() || regNombre.toLowerCase().replace(/\s+/g, "_");
+      if (!regNombre.trim() || !uname || !regPass) {
+        setErr("Nombre, usuario y contraseña son obligatorios."); setLoading(false); return;
+      }
+      if (regPass.length < 8) {
+        setErr("La contraseña debe tener al menos 8 caracteres."); setLoading(false); return;
+      }
+      const r = await API.register({ nombre: regNombre.trim(), username: uname, email: regEmail.trim(), password: regPass });
+      if (r.error) { setErr(r.error); }
+      else { setRegOk(true); }
+    } catch { setErr("Error de conexión. Intentá nuevamente."); }
+    finally { setLoading(false); }
+  };
+
+  const submitForgot = async (e) => {
+    e.preventDefault();
+    setErr(""); setLoading(true);
+    try {
+      const r = await fetch("/api/forgot-password", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_or_username: fgIdentifier }),
+      }).then(x => x.json());
+      setFgResult(r);
+    } catch { setErr("Error de conexión."); }
+    finally { setLoading(false); }
+  };
+
+  const aside = (
+    <aside className="login-aside">
+      <div className="login-brand">
+        <div className="login-brand-mark"><Icon.ShieldCheck size={20}/></div>
+        <div>
+          <div className="login-brand-name">NormaLab</div>
+          <div className="login-brand-sub">GRC · Proof of Concept</div>
+        </div>
+      </div>
+      <div className="login-msg">
+        <h1>Compliance GRC,<br/>sin complejidad innecesaria.</h1>
+        <p>Gap analysis multi-framework: ISO 27001, NIST CSF 2.0, SOC 2, CIS Controls v8 y más. Centralizá controles, riesgos, evidencia y planes de remediación en un solo lugar.</p>
+      </div>
+      <div className="login-feats">
+        {[
+          { ic: "ClipboardCheck", text: "530+ controles en 7 frameworks y normativas" },
+          { ic: "Cpu",            text: "Análisis de evidencias asistido por IA" },
+          { ic: "History",        text: "Log inmutable para auditoría externa" },
+        ].map(f => {
+          const FI = Icon[f.ic];
+          return (
+            <div key={f.ic} className="login-feat">
+              <span className="login-feat-ic"><FI size={14}/></span>
+              <span>{f.text}</span>
+            </div>
+          );
+        })}
+      </div>
+    </aside>
+  );
+
+  const errBox = err ? (
+    <div style={{ background:"var(--danger-soft)", border:"1px solid var(--danger-border)", borderRadius:8, padding:"10px 14px", fontSize:13, color:"var(--danger)" }}>
+      {err}
+    </div>
+  ) : null;
+
+  /* ── Login ── */
+  if (mode === "login") return (
     <div className="login-page">
-      <aside className="login-aside">
-        <div className="login-brand">
-          <div className="login-brand-mark"><Icon.ShieldCheck size={20}/></div>
-          <div>
-            <div className="login-brand-name">NormaLab</div>
-            <div className="login-brand-sub">GRC · Proof of Concept</div>
-          </div>
-        </div>
-
-        <div className="login-msg">
-          <h1>Compliance GRC,<br/>sin complejidad innecesaria.</h1>
-          <p>Gap analysis multi-framework: ISO 27001, NIST CSF 2.0, SOC 2, CIS Controls v8 y más. Centralizá controles, riesgos, evidencia y planes de remediación en un solo lugar.</p>
-        </div>
-
-        <div className="login-feats">
-          {[
-            { ic: "ClipboardCheck", text: "530+ controles en 7 frameworks y normativas" },
-            { ic: "Cpu",            text: "Análisis de evidencias asistido por IA" },
-            { ic: "History",        text: "Log inmutable para auditoría externa" },
-          ].map(f => {
-            const FI = Icon[f.ic];
-            return (
-              <div key={f.ic} className="login-feat">
-                <span className="login-feat-ic"><FI size={14}/></span>
-                <span>{f.text}</span>
-              </div>
-            );
-          })}
-        </div>
-      </aside>
-
+      {aside}
       <main className="login-main">
         <div className="login-card">
           <h2>Iniciar sesión</h2>
           <div className="hint">Ingresá con tu cuenta corporativa.</div>
-
-          <form className="login-form" onSubmit={submit}>
-            {err && (
-              <div style={{ background:"var(--danger-soft)", border:"1px solid var(--danger-border)", borderRadius:8, padding:"10px 14px", fontSize:13, color:"var(--danger)" }}>
-                {err}
-              </div>
-            )}
+          <form className="login-form" onSubmit={submitLogin}>
+            {errBox}
             <div className="field">
               <label>Usuario</label>
               <input className="input" value={user} onChange={e => setUser(e.target.value)} autoFocus autoComplete="username"/>
@@ -73,14 +121,8 @@ function LoginScreen({ onLogin }) {
             <div className="field">
               <label>Contraseña</label>
               <div style={{ position:"relative" }}>
-                <input
-                  className="input"
-                  type={showP ? "text" : "password"}
-                  value={pass}
-                  onChange={e => setPass(e.target.value)}
-                  style={{ paddingRight: 38 }}
-                  autoComplete="current-password"
-                />
+                <input className="input" type={showP ? "text" : "password"} value={pass}
+                  onChange={e => setPass(e.target.value)} style={{ paddingRight: 38 }} autoComplete="current-password"/>
                 <button type="button" onClick={() => setShowP(!showP)}
                   style={{ position:"absolute", right:4, top:4, bottom:4, padding:"0 8px", border:"none", background:"transparent", color:"var(--text-muted)", cursor:"pointer" }}>
                   {showP ? <Icon.EyeOff size={14}/> : <Icon.Eye size={14}/>}
@@ -91,11 +133,105 @@ function LoginScreen({ onLogin }) {
               {loading ? <Icon.Loader size={14}/> : <><Icon.ArrowRight size={14}/> Iniciar sesión</>}
             </button>
           </form>
-
           <div className="login-extra">
-            <a href="#forgot">¿Olvidaste tu contraseña?</a>
-            <a href="#register">Crear cuenta</a>
+            <button className="btn btn-ghost btn-sm" style={{ padding:0, background:"none", border:"none", color:"var(--accent)", cursor:"pointer", fontSize:13 }}
+              onClick={() => goMode("forgot")}>¿Olvidaste tu contraseña?</button>
+            <button className="btn btn-ghost btn-sm" style={{ padding:0, background:"none", border:"none", color:"var(--accent)", cursor:"pointer", fontSize:13 }}
+              onClick={() => goMode("register")}>Crear cuenta</button>
           </div>
+        </div>
+      </main>
+    </div>
+  );
+
+  /* ── Register ── */
+  if (mode === "register") return (
+    <div className="login-page">
+      {aside}
+      <main className="login-main">
+        <div className="login-card">
+          <h2>Crear cuenta</h2>
+          <div className="hint">Tu cuenta quedará pendiente de aprobación por el administrador.</div>
+          {regOk ? (
+            <div style={{ background:"var(--success-soft)", border:"1px solid var(--success-border)", borderRadius:8, padding:"16px", fontSize:13.5, color:"var(--success)", lineHeight:1.6 }}>
+              <strong>¡Cuenta creada!</strong><br/>
+              Un administrador deberá aprobarla antes de que puedas ingresar.
+              <div style={{ marginTop:14 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => goMode("login")}>
+                  <Icon.ArrowLeft size={13}/> Volver al login
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form className="login-form" onSubmit={submitRegister}>
+              {errBox}
+              <div className="field">
+                <label>Nombre completo <span style={{ color:"var(--danger)" }}>*</span></label>
+                <input className="input" value={regNombre} onChange={e => { setRegNombre(e.target.value); setRegUsername(e.target.value.toLowerCase().replace(/\s+/g,"_")); }} autoFocus placeholder="María García"/>
+              </div>
+              <div className="field">
+                <label>Nombre de usuario <span style={{ color:"var(--danger)" }}>*</span></label>
+                <input className="input" value={regUsername} onChange={e => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,""))} placeholder="maria_garcia"/>
+              </div>
+              <div className="field">
+                <label>Email corporativo</label>
+                <input className="input" type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="maria@empresa.com"/>
+              </div>
+              <div className="field">
+                <label>Contraseña <span style={{ color:"var(--danger)" }}>*</span></label>
+                <input className="input" type="password" value={regPass} onChange={e => setRegPass(e.target.value)} placeholder="Mínimo 8 caracteres" autoComplete="new-password"/>
+              </div>
+              <button className="btn btn-primary" type="submit" style={{ marginTop:6 }} disabled={loading}>
+                {loading ? <Icon.Loader size={14}/> : <><Icon.Check size={14}/> Crear cuenta</>}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop:6 }} onClick={() => goMode("login")}>
+                <Icon.ArrowLeft size={13}/> Volver al login
+              </button>
+            </form>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+
+  /* ── Forgot password ── */
+  return (
+    <div className="login-page">
+      {aside}
+      <main className="login-main">
+        <div className="login-card">
+          <h2>Recuperar contraseña</h2>
+          <div className="hint">Ingresá tu email o usuario para recibir el link de reseteo.</div>
+          {fgResult ? (
+            <div style={{ background:"var(--surface-2)", border:"1px solid var(--border)", borderRadius:8, padding:"16px", fontSize:13.5, lineHeight:1.7 }}>
+              {fgResult.email_sent
+                ? <><Icon.Check size={14} style={{ color:"var(--success)" }}/> Se envió un link a tu email.</>
+                : fgResult.reset_url
+                  ? <><p style={{ margin:"0 0 10px" }}>Email no configurado. Link de reseteo:</p>
+                     <code style={{ wordBreak:"break-all", fontSize:12 }}>{fgResult.reset_url}</code></>
+                  : <span style={{ color:"var(--text-muted)" }}>Si el usuario existe, recibirás un link de recuperación.</span>
+              }
+              <div style={{ marginTop:14 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => goMode("login")}>
+                  <Icon.ArrowLeft size={13}/> Volver al login
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form className="login-form" onSubmit={submitForgot}>
+              {errBox}
+              <div className="field">
+                <label>Email o usuario</label>
+                <input className="input" value={fgIdentifier} onChange={e => setFgIdentifier(e.target.value)} autoFocus placeholder="usuario o email@empresa.com"/>
+              </div>
+              <button className="btn btn-primary" type="submit" style={{ marginTop:6 }} disabled={loading}>
+                {loading ? <Icon.Loader size={14}/> : <><Icon.Mail size={14}/> Enviar link</>}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop:6 }} onClick={() => goMode("login")}>
+                <Icon.ArrowLeft size={13}/> Volver al login
+              </button>
+            </form>
+          )}
         </div>
       </main>
     </div>

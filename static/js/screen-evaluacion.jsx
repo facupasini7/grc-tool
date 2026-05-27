@@ -3,6 +3,16 @@
 
 const { useState: useStateE, useEffect: useEffectE, useCallback: useCallbackE } = React;
 
+// Helper: read File as base64 (strips data-URL prefix)
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload  = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+  });
+}
+
 function EvaluacionScreen({ evalId, onBack, onNav, user }) {
   const { data: ev,       loading: le } = useApi(() => API.evaluacion(evalId),        [evalId]);
   const { data: ctrlData, loading: lc, reload: reloadCtrls } = useApi(() => API.controles(evalId), [evalId]);
@@ -25,7 +35,14 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
     if (!controles.length) return;
     const r = {};
     controles.forEach(c => {
-      r[c.id] = { madurez: c.madurez ?? 0, comentario: c.comentario ?? "", aplica: c.aplica ?? 1 };
+      r[c.id] = {
+        madurez:  c.madurez ?? 0,
+        comentario: c.comentario ?? "",
+        aplica:   c.aplica ?? 1,
+        ia_madurez_sugerida:       c.ia_madurez_sugerida ?? null,
+        ia_comentario:             c.ia_comentario ?? "",
+        ia_pendiente_confirmacion: c.ia_pendiente_confirmacion ?? 0,
+      };
     });
     setRespuestas(r);
     if (!dominioActivo) setDominioActivo(Object.keys(dominios)[0]);
@@ -37,6 +54,7 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
     const payload = { control_id: ctrl.id, madurez, comentario: comentario ?? respuestas[ctrl.id]?.comentario ?? "", aplica: aplica ?? respuestas[ctrl.id]?.aplica ?? 1 };
     try {
       await API.guardarRespuesta(evalId, payload);
+      // Preserve IA fields in local state after manual save
       setRespuestas(s => ({ ...s, [ctrl.id]: { ...s[ctrl.id], ...payload } }));
     } catch { /* silently fail */ }
     finally { setSaving(s => ({ ...s, [ctrl.id]: false })); }
@@ -110,11 +128,12 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
           <ControlRow
             key={ctrl.id}
             ctrl={ctrl}
-            resp={respuestas[ctrl.id] || { madurez: ctrl.madurez ?? 0, comentario: ctrl.comentario ?? "", aplica: ctrl.aplica ?? 1 }}
+            resp={respuestas[ctrl.id] || { madurez: ctrl.madurez ?? 0, comentario: ctrl.comentario ?? "", aplica: ctrl.aplica ?? 1, ia_madurez_sugerida: ctrl.ia_madurez_sugerida, ia_comentario: ctrl.ia_comentario ?? "", ia_pendiente_confirmacion: ctrl.ia_pendiente_confirmacion ?? 0 }}
             saving={saving[ctrl.id]}
             evalId={evalId}
             onSave={(m, c, a) => guardar(ctrl, m, c, a)}
             onNewHallazgo={() => setNewHallazgo(ctrl)}
+            onReloadCtrls={reloadCtrls}
           />
         ))}
       </div>
@@ -138,18 +157,20 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
   );
 }
 
-function ControlRow({ ctrl, resp, saving, evalId, onSave, onNewHallazgo }) {
-  const [open,      setOpen]      = useStateE(false);
-  const [comentario,setComentario]= useStateE(resp.comentario || "");
-  const [aplica,    setAplica]    = useStateE(resp.aplica !== 0);
+function ControlRow({ ctrl, resp, saving, evalId, onSave, onNewHallazgo, onReloadCtrls }) {
+  const [open,         setOpen]         = useStateE(false);
+  const [comentario,   setComentario]   = useStateE(resp.comentario || "");
+  const [aplica,       setAplica]       = useStateE(resp.aplica !== 0);
+  const [confirmingIa, setConfirmingIa] = useStateE(false);
 
-  // Sync comentario when resp changes from parent
+  // Sync fields when resp changes from parent
   useEffectE(() => { setComentario(resp.comentario || ""); }, [resp.comentario]);
   useEffectE(() => { setAplica(resp.aplica !== 0); }, [resp.aplica]);
 
-  const m     = resp.madurez ?? 0;
-  const isBad = aplica && m > 0 && m < 3;
-  const isOk  = aplica && m >= 3;
+  const m          = resp.madurez ?? 0;
+  const isBad      = aplica && m > 0 && m < 3;
+  const hasIaSug   = resp.ia_pendiente_confirmacion === 1 && resp.ia_madurez_sugerida != null;
+  const comentDirty = comentario !== (resp.comentario || "");
 
   const status = !aplica
     ? <Badge tone="neutral">No aplica</Badge>
@@ -158,6 +179,15 @@ function ControlRow({ ctrl, resp, saving, evalId, onSave, onNewHallazgo }) {
       : isBad
         ? <Badge tone="danger" dot>Brecha</Badge>
         : <Badge tone="success" dot>Cumple</Badge>;
+
+  const handleConfirmIa = async (confirmar) => {
+    setConfirmingIa(true);
+    try {
+      await API.confirmarIa(evalId, ctrl.id, confirmar);
+      if (onReloadCtrls) onReloadCtrls();
+    } catch { alert("Error al procesar la sugerencia de IA."); }
+    finally { setConfirmingIa(false); }
+  };
 
   return (
     <div>
@@ -171,13 +201,43 @@ function ControlRow({ ctrl, resp, saving, evalId, onSave, onNewHallazgo }) {
           <Maturity value={m}/>
         </div>
         <div className="ctrl-status">
-          {status}
+          {hasIaSug && <Badge tone="accent" dot>IA pendiente</Badge>}
+          {!hasIaSug && status}
           <Icon.ChevronDown size={14} style={{ color:"var(--text-faint)", transform: open ? "rotate(180deg)" : "none", transition:"transform .15s" }}/>
         </div>
       </div>
 
       {open && (
         <div className="ctrl-expand">
+
+          {/* ── IA Suggestion Banner ── */}
+          {hasIaSug && (
+            <div style={{
+              background:"linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08))",
+              border:"1px solid rgba(99,102,241,.3)", borderRadius:10, padding:"14px 16px",
+              marginBottom:14
+            }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                <Icon.Cpu size={14} style={{ color:"var(--accent)", flexShrink:0 }}/>
+                <span style={{ fontWeight:700, fontSize:13, color:"var(--accent)" }}>Sugerencia de IA</span>
+                <Badge tone="accent">Madurez {resp.ia_madurez_sugerida}/5</Badge>
+              </div>
+              {resp.ia_comentario && (
+                <p style={{ fontSize:12.5, color:"var(--text-secondary)", margin:"0 0 12px", lineHeight:1.55 }}>
+                  {resp.ia_comentario}
+                </p>
+              )}
+              <div style={{ display:"flex", gap:8 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => handleConfirmIa(true)} disabled={confirmingIa}>
+                  {confirmingIa ? <Icon.Loader size={12}/> : <><Icon.Check size={12}/> Confirmar resultado</>}
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => handleConfirmIa(false)} disabled={confirmingIa}>
+                  <Icon.X size={12}/> Evaluar manualmente
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
             <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12.5, color:"var(--text-secondary)", cursor:"pointer", userSelect:"none" }}>
               <input type="checkbox" checked={aplica} onChange={e => { setAplica(e.target.checked); onSave(m, comentario, e.target.checked ? 1 : 0); }} style={{ accentColor:"var(--accent)" }}/>
@@ -193,8 +253,17 @@ function ControlRow({ ctrl, resp, saving, evalId, onSave, onNewHallazgo }) {
             placeholder="Comentario u observación sobre este control…"
             value={comentario}
             onChange={e => setComentario(e.target.value)}
-            onBlur={() => { if (comentario !== (resp.comentario || "")) onSave(m, comentario, aplica ? 1 : 0); }}
+            onBlur={() => { if (comentDirty) onSave(m, comentario, aplica ? 1 : 0); }}
           />
+
+          {/* Explicit save button for comment */}
+          {comentDirty && (
+            <div style={{ display:"flex", justifyContent:"flex-end", marginTop:-4 }}>
+              <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); onSave(m, comentario, aplica ? 1 : 0); }}>
+                {saving ? <Icon.Loader size={12}/> : <><Icon.Check size={12}/> Guardar comentario</>}
+              </button>
+            </div>
+          )}
 
           <div style={{ display:"flex", gap:8 }}>
             {isBad && (
@@ -218,13 +287,19 @@ function EvidenciasInline({ evalId, ctrlId }) {
   const upload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const fd = new FormData();
-    fd.append("archivo", file);
-    fd.append("control_id", ctrlId);
+    if (file.size > 20 * 1024 * 1024) {
+      alert("El archivo supera el límite de 20 MB.");
+      e.target.value = "";
+      return;
+    }
     try {
-      await fetch(`/api/evaluaciones/${evalId}/controles/${ctrlId}/evidencias`, { method:"POST", body: fd, credentials:"include" });
+      const data = await fileToBase64(file);
+      await API.subirEvidencia(evalId, ctrlId, { filename: file.name, data });
       reload();
-    } catch { alert("Error al subir evidencia"); }
+    } catch (err) {
+      const msg = err?.message || "Error al subir evidencia";
+      alert(msg.includes("IA") ? msg : "Error al subir el archivo. Verificá el formato y tamaño.");
+    }
     e.target.value = "";
   };
 
@@ -238,15 +313,24 @@ function EvidenciasInline({ evalId, ctrlId }) {
         <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
           {loading ? <Icon.Loader size={14} style={{ animation:"spin 1s linear infinite", color:"var(--accent)" }}/> :
             evidencias.length === 0 ? <div style={{ fontSize:12, color:"var(--text-muted)" }}>Sin evidencias adjuntas.</div> :
-            evidencias.map(ev => (
-              <div key={ev.id} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:7, padding:"8px 12px", fontSize:12, display:"flex", alignItems:"center", gap:8 }}>
-                <Icon.FileText size={13} style={{ color:"var(--text-muted)", flexShrink:0 }}/>
-                <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ev.filename}</span>
-                <Badge tone={ ev.veredicto==="cumple"?"success":ev.veredicto==="no_cumple"?"danger":ev.veredicto==="parcial"?"warning":"neutral" }>
-                  {ev.veredicto || "pendiente"}
-                </Badge>
-              </div>
-            ))
+            evidencias.map(ev => {
+              const vTone = { cumple:"success", no_cumple:"danger", parcial:"warning" }[ev.veredicto] || "neutral";
+              const analisis = ev.analisis_ia ? (() => { try { return JSON.parse(ev.analisis_ia); } catch { return null; }})() : null;
+              return (
+                <div key={ev.id} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:7, padding:"8px 12px", fontSize:12 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <Icon.FileText size={13} style={{ color:"var(--text-muted)", flexShrink:0 }}/>
+                    <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ev.filename}</span>
+                    <Badge tone={vTone}>{ev.veredicto || "pendiente"}</Badge>
+                  </div>
+                  {analisis?.resumen && (
+                    <div style={{ marginTop:5, color:"var(--text-muted)", fontSize:11.5, lineHeight:1.5, paddingLeft:21 }}>
+                      <Icon.Cpu size={10} style={{ marginRight:4, color:"var(--accent)" }}/>{analisis.resumen}
+                    </div>
+                  )}
+                </div>
+              );
+            }))
           }
           <label style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 10px", border:"1.5px dashed var(--border)", borderRadius:7, fontSize:12, color:"var(--text-muted)", cursor:"pointer" }}>
             <Icon.Upload size={13}/> Subir archivo

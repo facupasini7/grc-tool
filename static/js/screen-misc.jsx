@@ -480,16 +480,19 @@ function UsuarioModal({ open, onClose, editing }) {
   }, [editing]);
 
   const submit = async () => {
+    if (!editing && (!nombre || !pass)) {
+      alert("El nombre y la contraseña son requeridos.");
+      return;
+    }
     setLoading(true);
     try {
       if (editing) {
         await API.actualizarUsuario(editing.id, { nombre, email, rol, activo: activo ? 1 : 0, ...(pass ? { password: pass } : {}) });
       } else {
-        if (!nombre || !pass) return;
         await API.crearUsuario({ username: nombre.toLowerCase().replace(/\s+/g,"_"), nombre, email, rol, password: pass });
       }
       onClose();
-    } catch { alert("Error al guardar usuario"); }
+    } catch (e) { alert("Error al guardar usuario: " + (e?.message || "intente nuevamente")); }
     finally { setLoading(false); }
   };
 
@@ -897,9 +900,12 @@ function EmailConfigCard() {
   const test = async () => {
     setTesting(true); setMsg("");
     try {
-      const r = await API.enviarRecordatorios();
-      setMsg(`✓ Chequeo ejecutado — enviados: ${r.sent}, errores: ${r.errors}`);
-    } catch { setMsg("Error al ejecutar chequeo."); }
+      const r = await API.testSmtp();
+      setMsg(`✓ Email de prueba enviado a ${r.to}`);
+    } catch (e) {
+      // Try to get error message from response
+      setMsg("Error al enviar el email de prueba. Verificá la configuración SMTP.");
+    }
     finally { setTesting(false); }
   };
 
@@ -961,7 +967,7 @@ function EmailConfigCard() {
           {loading ? <Icon.Loader size={13}/> : <><Icon.Check size={13}/> Guardar configuración</>}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={test} disabled={testing}>
-          {testing ? <Icon.Loader size={13}/> : <><Icon.Mail size={13}/> Probar recordatorios</>}
+          {testing ? <Icon.Loader size={13}/> : <><Icon.Mail size={13}/> Probar conexión SMTP</>}
         </button>
       </div>
     </div>

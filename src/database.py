@@ -147,6 +147,10 @@ def _migrate():
         "ALTER TABLE respuestas ADD COLUMN excepcion_justificacion TEXT DEFAULT ''",
         "ALTER TABLE respuestas ADD COLUMN excepcion_aprobada INTEGER DEFAULT 0",
         "ALTER TABLE respuestas ADD COLUMN excepcion_hasta TEXT DEFAULT ''",
+        # v3 — IA suggestions per control
+        "ALTER TABLE respuestas ADD COLUMN ia_madurez_sugerida INTEGER",
+        "ALTER TABLE respuestas ADD COLUMN ia_comentario TEXT DEFAULT ''",
+        "ALTER TABLE respuestas ADD COLUMN ia_pendiente_confirmacion INTEGER DEFAULT 0",
     ]
     new_tables = """
         CREATE TABLE IF NOT EXISTS riesgos (
@@ -268,9 +272,10 @@ PERMISOS_CATALOGO = [
     ("eval.responder",      "Completar controles",           "Responder y actualizar el nivel de madurez de controles",     "Evaluaciones"),
     ("eval.eliminar",       "Eliminar evaluaciones",         "Eliminar evaluaciones y todos sus datos asociados",           "Evaluaciones"),
     # Hallazgos
-    ("hallazgos.ver",       "Ver hallazgos",                 "Consultar el registro de hallazgos y no conformidades",       "Hallazgos"),
-    ("hallazgos.gestionar", "Gestionar hallazgos",           "Crear, editar y cambiar estado de hallazgos",                 "Hallazgos"),
-    ("hallazgos.aprobar",   "Aprobar hallazgos",             "Aprobar y verificar resolución de hallazgos",                 "Hallazgos"),
+    ("hallazgos.ver",                "Ver hallazgos",                    "Consultar el registro de hallazgos y no conformidades",                    "Hallazgos"),
+    ("hallazgos.gestionar",          "Gestionar hallazgos",              "Crear, editar y cambiar estado de hallazgos",                              "Hallazgos"),
+    ("hallazgos.aprobar",            "Aprobar hallazgos",                "Aprobar y verificar resolución de hallazgos",                              "Hallazgos"),
+    ("hallazgos.crear_incumplimiento","Crear hallazgo por incumplimiento","Abrir hallazgos cuando evidencia está vencida o rechazada por la IA",     "Hallazgos"),
     # Riesgos
     ("riesgos.ver",         "Ver riesgos",                   "Consultar el registro de riesgos del SGSI",                   "Riesgos"),
     ("riesgos.gestionar",   "Gestionar riesgos",             "Crear, editar y actualizar tratamiento de riesgos",           "Riesgos"),
@@ -298,7 +303,7 @@ PERMISOS_POR_ROL = {
     "admin": [p[0] for p in PERMISOS_CATALOGO],  # todos
     "analista": [
         "eval.ver", "eval.crear", "eval.responder",
-        "hallazgos.ver", "hallazgos.gestionar",
+        "hallazgos.ver", "hallazgos.gestionar", "hallazgos.crear_incumplimiento",
         "riesgos.ver", "riesgos.gestionar",
         "remediacion.ver", "remediacion.gestionar",
         "evidencias.ver", "evidencias.subir",

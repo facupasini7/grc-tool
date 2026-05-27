@@ -82,9 +82,18 @@ DESCRIPCIÓN: {control_descripcion}
 EVIDENCIA PRESENTADA:
 {evidencia}
 
+Escala de madurez para "madurez_sugerida":
+0 = Sin evidencia / No evaluable
+1 = Inicial (ad-hoc, sin procedimientos formales)
+2 = Básico (documentado pero no implementado consistentemente)
+3 = Definido (implementado y documentado formalmente)
+4 = Gestionado (monitorizado con métricas y mejora continua)
+5 = Optimizado (proceso maduro, mejora continua y best practices)
+
 Responde EXACTAMENTE en este formato JSON (sin texto adicional, solo el JSON):
 {{
   "veredicto": "cumple" | "parcial" | "no_cumple",
+  "madurez_sugerida": 0,
   "resumen": "Una oración que resume el veredicto",
   "fortalezas": ["punto positivo 1", "punto positivo 2"],
   "brechas": ["brecha 1", "brecha 2"],
@@ -107,9 +116,18 @@ DESCRIPCIÓN: {control_descripcion}
 
 ¿La imagen demuestra que este control está implementado?
 
+Escala de madurez para "madurez_sugerida":
+0 = Sin evidencia / No evaluable
+1 = Inicial (ad-hoc)
+2 = Básico (documentado pero inconsistente)
+3 = Definido (implementado formalmente)
+4 = Gestionado (con métricas)
+5 = Optimizado (mejora continua)
+
 Responde EXACTAMENTE en este formato JSON (sin texto adicional):
 {{
   "veredicto": "cumple" | "parcial" | "no_cumple",
+  "madurez_sugerida": 0,
   "resumen": "Una oración que resume el veredicto",
   "fortalezas": ["punto positivo 1"],
   "brechas": ["brecha 1"],
@@ -187,7 +205,8 @@ def _llamar_ollama(prompt: str, imagen_b64: str = None) -> dict:
 def _error_ollama(msg: str) -> dict:
     return {
         "veredicto": "pendiente",
-        "resumen": f"Error al conectar con Ollama: {msg}",
+        "madurez_sugerida": None,
+        "resumen": f"Error al conectar con el motor de IA: {msg}",
         "fortalezas": [],
         "brechas": [],
         "recomendacion": "Verificá que Ollama esté corriendo y el modelo descargado.",

@@ -254,7 +254,7 @@ const sevTone   = (sev) => ({ critica: "danger",  alta: "warning", media: "info"
 const sevLabel  = (sev) => ({ critica: "Crítica", alta: "Alta",    media: "Media",baja: "Baja"    }[sev] || sev);
 const stateTone = (st)  => ({ abierto:"danger", en_proceso:"warning", resuelto:"success", verificado:"info" }[st] || "neutral");
 const stateLabel = (st) => ({ abierto:"Abierto", en_proceso:"En proceso", resuelto:"Resuelto", verificado:"Verificado" }[st] || st);
-const roleLabel = (r)   => ({ admin:"Administrador", analista:"Analista", auditado:"Auditado", auditor_externo:"Auditor externo" }[r] || r);
+const roleLabel = (r)   => ({ admin:"Administrador", analista:"Analista GRC", auditado:"Auditado", auditor_externo:"Auditor Externo" }[r] || r);
 
 // ── Export ────────────────────────────────────────────────────────
 Object.assign(window, {

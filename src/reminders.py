@@ -67,7 +67,7 @@ def _reminder_html(nombre: str, control_nombre: str, evaluacion: str,
                box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden">
     <div style="background:#0b1220;padding:24px 32px;display:flex;align-items:center;gap:12px">
       <span style="color:#7c6ef2;font-size:22px">🛡</span>
-      <span style="color:#fff;font-weight:700;font-size:18px">Sentry GRC</span>
+      <span style="color:#fff;font-weight:700;font-size:18px">NormaLab GRC</span>
     </div>
     <div style="padding:32px">
       <p style="margin:0 0 8px;color:#666;font-size:14px">Recordatorio de vencimiento</p>
@@ -107,10 +107,10 @@ def _reminder_html(nombre: str, control_nombre: str, evaluacion: str,
       <a href="{base_url}" style="display:inline-block;background:#7c6ef2;color:#fff;
                                     padding:12px 24px;border-radius:8px;text-decoration:none;
                                     font-weight:600;font-size:14px;margin-top:8px">
-        Ir a Sentry GRC →
+        Ir a NormaLab GRC →
       </a>
       <p style="color:#aaa;font-size:12px;margin-top:24px">
-        Este es un recordatorio automático generado por Sentry GRC. No respondas este email.
+        Este es un recordatorio automático generado por NormaLab GRC. No respondas este email.
       </p>
     </div>
   </div>
@@ -127,7 +127,7 @@ def _reminder_plain(nombre: str, control_nombre: str, evaluacion: str,
         f"  Evaluación: {evaluacion}\n"
         f"  Fecha límite: {fecha_limite}\n"
         f"  Días restantes: {dias}\n\n"
-        f"Accedé a Sentry GRC para subir la evidencia:\n{base_url}\n\n"
+        f"Accedé a NormaLab GRC para subir la evidencia:\n{base_url}\n\n"
         f"Este es un recordatorio automático. No respondas este email."
     )
 
@@ -190,7 +190,7 @@ def check_and_send_reminders(base_url: str = "http://localhost:8090") -> dict:
                 row["fecha_limite"], dias_restantes, base_url
             )
             subject = (
-                f"[Sentry GRC] Recordatorio: {dias_restantes}d para subir evidencia — {ctrl_nombre[:40]}"
+                f"[NormaLab GRC] Recordatorio: {dias_restantes}d para subir evidencia — {ctrl_nombre[:40]}"
             )
             ok = send_email(row["usuario_email"], subject, html, plain)
 
