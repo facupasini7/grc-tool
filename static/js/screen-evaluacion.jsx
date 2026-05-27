@@ -160,18 +160,18 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
 
 function ControlRow({ ctrl, resp, saving, evalId, user, onSave, onNewHallazgo, onReloadCtrls }) {
   const [open,         setOpen]         = useStateE(false);
-  const [comentario,   setComentario]   = useStateE(resp.comentario || "");
   const [aplica,       setAplica]       = useStateE(resp.aplica !== 0);
   const [confirmingIa, setConfirmingIa] = useStateE(false);
 
-  // Sync fields when resp changes from parent
-  useEffectE(() => { setComentario(resp.comentario || ""); }, [resp.comentario]);
   useEffectE(() => { setAplica(resp.aplica !== 0); }, [resp.aplica]);
 
+  // El comentario "oficial" de la respuesta se preserva tal cual está en DB
+  // (la observación/discusión ahora vive 100% en DiscusionThread).
+  const comentarioPersist = resp.comentario || "";
+
   const m          = resp.madurez ?? 0;
-  const isBad      = aplica && m > 0 && m < 3;
+  const isBad      = aplica && m < 3;
   const hasIaSug   = resp.ia_pendiente_confirmacion === 1 && resp.ia_madurez_sugerida != null;
-  const comentDirty = comentario !== (resp.comentario || "");
 
   const status = !aplica
     ? <Badge tone="neutral">No aplica</Badge>
@@ -241,30 +241,12 @@ function ControlRow({ ctrl, resp, saving, evalId, user, onSave, onNewHallazgo, o
 
           <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
             <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12.5, color:"var(--text-secondary)", cursor:"pointer", userSelect:"none" }}>
-              <input type="checkbox" checked={aplica} onChange={e => { setAplica(e.target.checked); onSave(m, comentario, e.target.checked ? 1 : 0); }} style={{ accentColor:"var(--accent)" }}/>
+              <input type="checkbox" checked={aplica} onChange={e => { setAplica(e.target.checked); onSave(m, comentarioPersist, e.target.checked ? 1 : 0); }} style={{ accentColor:"var(--accent)" }}/>
               Aplica
             </label>
-            <MaturitySelector value={m} disabled={!aplica} onChange={v => onSave(v, comentario, aplica ? 1 : 0)}/>
+            <MaturitySelector value={m} disabled={!aplica} onChange={v => onSave(v, comentarioPersist, aplica ? 1 : 0)}/>
             {saving && <Icon.Loader size={13} style={{ color:"var(--accent)", animation:"spin 1s linear infinite" }}/>}
           </div>
-
-          <textarea
-            className="textarea"
-            rows={2}
-            placeholder="Comentario u observación sobre este control…"
-            value={comentario}
-            onChange={e => setComentario(e.target.value)}
-            onBlur={() => { if (comentDirty) onSave(m, comentario, aplica ? 1 : 0); }}
-          />
-
-          {/* Explicit save button for comment */}
-          {comentDirty && (
-            <div style={{ display:"flex", justifyContent:"flex-end", marginTop:-4 }}>
-              <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); onSave(m, comentario, aplica ? 1 : 0); }}>
-                {saving ? <Icon.Loader size={12}/> : <><Icon.Check size={12}/> Guardar comentario</>}
-              </button>
-            </div>
-          )}
 
           <div style={{ display:"flex", gap:8 }}>
             {isBad && (
