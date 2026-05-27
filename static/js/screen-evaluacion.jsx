@@ -42,6 +42,9 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
         ia_madurez_sugerida:       c.ia_madurez_sugerida ?? null,
         ia_comentario:             c.ia_comentario ?? "",
         ia_pendiente_confirmacion: c.ia_pendiente_confirmacion ?? 0,
+        verificado:                c.verificado ?? 0,
+        verificado_por:            c.verificado_por ?? null,
+        verificado_en:             c.verificado_en ?? null,
       };
     });
     setRespuestas(r);
@@ -54,8 +57,19 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
     const payload = { control_id: ctrl.id, madurez, comentario: comentario ?? respuestas[ctrl.id]?.comentario ?? "", aplica: aplica ?? respuestas[ctrl.id]?.aplica ?? 1 };
     try {
       await API.guardarRespuesta(evalId, payload);
-      // Preserve IA fields in local state after manual save
-      setRespuestas(s => ({ ...s, [ctrl.id]: { ...s[ctrl.id], ...payload } }));
+      // Si madurez/aplica cambiaron en un control verificado, el backend
+      // invalida la verificación automáticamente. Reflejarlo en local.
+      const prev = respuestas[ctrl.id] || {};
+      const invalidaVerificacion = prev.verificado === 1 &&
+        (prev.madurez !== payload.madurez || prev.aplica !== payload.aplica);
+      setRespuestas(s => ({
+        ...s,
+        [ctrl.id]: {
+          ...s[ctrl.id],
+          ...payload,
+          ...(invalidaVerificacion ? { verificado: 0, verificado_por: null, verificado_en: null } : {}),
+        },
+      }));
     } catch { /* silently fail */ }
     finally { setSaving(s => ({ ...s, [ctrl.id]: false })); }
   };
@@ -128,7 +142,7 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
           <ControlRow
             key={ctrl.id}
             ctrl={ctrl}
-            resp={respuestas[ctrl.id] || { madurez: ctrl.madurez ?? 0, comentario: ctrl.comentario ?? "", aplica: ctrl.aplica ?? 1, ia_madurez_sugerida: ctrl.ia_madurez_sugerida, ia_comentario: ctrl.ia_comentario ?? "", ia_pendiente_confirmacion: ctrl.ia_pendiente_confirmacion ?? 0 }}
+            resp={respuestas[ctrl.id] || { madurez: ctrl.madurez ?? 0, comentario: ctrl.comentario ?? "", aplica: ctrl.aplica ?? 1, ia_madurez_sugerida: ctrl.ia_madurez_sugerida, ia_comentario: ctrl.ia_comentario ?? "", ia_pendiente_confirmacion: ctrl.ia_pendiente_confirmacion ?? 0, verificado: ctrl.verificado ?? 0, verificado_por: ctrl.verificado_por ?? null, verificado_en: ctrl.verificado_en ?? null }}
             saving={saving[ctrl.id]}
             evalId={evalId}
             user={user}
@@ -162,6 +176,7 @@ function ControlRow({ ctrl, resp, saving, evalId, user, onSave, onNewHallazgo, o
   const [open,         setOpen]         = useStateE(false);
   const [aplica,       setAplica]       = useStateE(resp.aplica !== 0);
   const [confirmingIa, setConfirmingIa] = useStateE(false);
+  const [verifying,    setVerifying]    = useStateE(false);
 
   useEffectE(() => { setAplica(resp.aplica !== 0); }, [resp.aplica]);
 
@@ -172,6 +187,8 @@ function ControlRow({ ctrl, resp, saving, evalId, user, onSave, onNewHallazgo, o
   const m          = resp.madurez ?? 0;
   const isBad      = aplica && m < 3;
   const hasIaSug   = resp.ia_pendiente_confirmacion === 1 && resp.ia_madurez_sugerida != null;
+  const verificado = resp.verificado === 1;
+  const canVerify  = user && (user.rol === "admin" || user.rol === "analista");
 
   const status = !aplica
     ? <Badge tone="neutral">No aplica</Badge>
@@ -190,6 +207,16 @@ function ControlRow({ ctrl, resp, saving, evalId, user, onSave, onNewHallazgo, o
     finally { setConfirmingIa(false); }
   };
 
+  const handleVerificar = async (e) => {
+    e.stopPropagation();
+    setVerifying(true);
+    try {
+      await API.verificarControl(evalId, ctrl.id);
+      if (onReloadCtrls) onReloadCtrls();
+    } catch { alert("Error al verificar el control."); }
+    finally { setVerifying(false); }
+  };
+
   return (
     <div>
       <div className={`ctrl-row ${open ? "is-open" : ""}`} onClick={() => setOpen(!open)} style={{ cursor:"pointer" }}>
@@ -204,6 +231,14 @@ function ControlRow({ ctrl, resp, saving, evalId, user, onSave, onNewHallazgo, o
         <div className="ctrl-status">
           {hasIaSug && <Badge tone="accent" dot>IA pendiente</Badge>}
           {!hasIaSug && status}
+          {verificado && (
+            <span title={`Verificado${resp.verificado_en ? " el " + fmtDateTime(resp.verificado_en) : ""}`}
+                  style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:11, fontWeight:600,
+                           color:"#10b981", background:"rgba(16,185,129,.12)", border:"1px solid rgba(16,185,129,.3)",
+                           padding:"2px 7px", borderRadius:10 }}>
+              <Icon.ShieldCheck size={11}/> Verificado
+            </span>
+          )}
           <Icon.ChevronDown size={14} style={{ color:"var(--text-faint)", transform: open ? "rotate(180deg)" : "none", transition:"transform .15s" }}/>
         </div>
       </div>
@@ -248,11 +283,23 @@ function ControlRow({ ctrl, resp, saving, evalId, user, onSave, onNewHallazgo, o
             {saving && <Icon.Loader size={13} style={{ color:"var(--accent)", animation:"spin 1s linear infinite" }}/>}
           </div>
 
-          <div style={{ display:"flex", gap:8 }}>
+          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
             {isBad && (
               <button className="btn btn-sm btn-secondary" onClick={e => { e.stopPropagation(); onNewHallazgo(); }}>
                 <Icon.Plus size={12}/> Registrar hallazgo
               </button>
+            )}
+            {canVerify && !verificado && (
+              <button className="btn btn-sm" onClick={handleVerificar} disabled={verifying}
+                style={{ background:"#10b981", color:"#fff", border:"none" }}>
+                {verifying ? <Icon.Loader size={12}/> : <><Icon.ShieldCheck size={12}/> Verificar</>}
+              </button>
+            )}
+            {verificado && (
+              <span style={{ fontSize:11.5, color:"#10b981", display:"inline-flex", alignItems:"center", gap:4 }}>
+                <Icon.ShieldCheck size={12}/>
+                Verificado{resp.verificado_en ? ` el ${fmtDateTime(resp.verificado_en)}` : ""}
+              </span>
             )}
             <EvidenciasInline evalId={evalId} ctrlId={ctrl.id}/>
           </div>

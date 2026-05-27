@@ -642,6 +642,10 @@ class Handler(BaseHTTPRequestHandler):
                     "ia_madurez_sugerida":        r.get("ia_madurez_sugerida") if r else None,
                     "ia_comentario":              r.get("ia_comentario", "") if r else "",
                     "ia_pendiente_confirmacion":  r.get("ia_pendiente_confirmacion", 0) if r else 0,
+                    # Verificación formal del analista
+                    "verificado":     r.get("verificado", 0) if r else 0,
+                    "verificado_por": r.get("verificado_por") if r else None,
+                    "verificado_en":  r.get("verificado_en") if r else None,
                 })
             self.send_json({"controles": result, "framework": fw_id, "framework_label": fw["label"]})
 
@@ -1191,6 +1195,15 @@ class Handler(BaseHTTPRequestHandler):
             comentario = body.get("comentario", "")
             aplica   = int(body.get("aplica", 1))
             with get_conn() as conn:
+                # Detectar si madurez o aplica cambiaron respecto al estado actual
+                prev = conn.execute(
+                    "SELECT madurez, aplica, verificado FROM respuestas WHERE evaluacion_id=? AND control_id=?",
+                    (eid, ctrl_id),
+                ).fetchone()
+                cambio_estructural = (
+                    prev is not None and prev["verificado"] == 1 and
+                    (prev["madurez"] != madurez or prev["aplica"] != aplica)
+                )
                 conn.execute(
                     """INSERT INTO respuestas (evaluacion_id, control_id, madurez, comentario, aplica)
                        VALUES (?,?,?,?,?)
@@ -1200,6 +1213,23 @@ class Handler(BaseHTTPRequestHandler):
                                      aplica=excluded.aplica""",
                     (eid, ctrl_id, madurez, comentario, aplica),
                 )
+                # Si cambió madurez/aplica en un control verificado, se pierde la verificación
+                if cambio_estructural:
+                    conn.execute(
+                        "UPDATE respuestas SET verificado=0, verificado_por=NULL, verificado_en=NULL "
+                        "WHERE evaluacion_id=? AND control_id=?",
+                        (eid, ctrl_id),
+                    )
+                    conn.execute(
+                        """INSERT INTO comentarios
+                           (evaluacion_id, control_id, usuario_id, usuario_nombre, usuario_rol, texto)
+                           VALUES (?,?,?,?,?,?)""",
+                        (eid, ctrl_id, user["id"],
+                         user.get("nombre") or user.get("username", "Usuario"),
+                         user.get("rol", ""),
+                         f"⚠️ La verificación se invalidó porque {user.get('nombre') or user.get('username','un usuario')} "
+                         f"modificó la madurez o el campo 'Aplica'. Requiere re-verificación."),
+                    )
                 conn.execute("UPDATE evaluaciones SET actualizada=datetime('now') WHERE id=?", (eid,))
             self.send_json({"ok": True})
 
@@ -1380,6 +1410,43 @@ class Handler(BaseHTTPRequestHandler):
                     )
             log_action(user["id"], user["username"],
                        "confirmar_ia" if confirmar else "rechazar_ia",
+                       "respuesta", ctrl_id, f"eval={eid}", self._ip())
+            self.send_json({"ok": True})
+
+        # ── Verificar control (analista/admin) ──
+        elif path.startswith("/api/evaluaciones/") and "/controles/" in path and path.endswith("/verificar"):
+            # POST /api/evaluaciones/{eid}/controles/{ctrl_id}/verificar
+            if user.get("rol") not in ("admin", "analista"):
+                self.send_json({"error": "Solo analista GRC o administrador pueden verificar."}, 403)
+                return
+            parts   = path.split("/")
+            eid     = int(parts[3])
+            ctrl_id = "/".join(parts[5:-1])
+            nombre_user = user.get("nombre") or user.get("username", "Analista")
+            with get_conn() as conn:
+                # Asegurar que existe una respuesta para este control
+                conn.execute(
+                    """INSERT OR IGNORE INTO respuestas
+                       (evaluacion_id, control_id, madurez, comentario, aplica)
+                       VALUES (?,?,0,'',1)""",
+                    (eid, ctrl_id),
+                )
+                conn.execute(
+                    """UPDATE respuestas
+                       SET verificado=1, verificado_por=?, verificado_en=datetime('now')
+                       WHERE evaluacion_id=? AND control_id=?""",
+                    (user["id"], eid, ctrl_id),
+                )
+                # Comentario automático en el thread
+                conn.execute(
+                    """INSERT INTO comentarios
+                       (evaluacion_id, control_id, usuario_id, usuario_nombre, usuario_rol, texto)
+                       VALUES (?,?,?,?,?,?)""",
+                    (eid, ctrl_id, user["id"], nombre_user, user.get("rol", ""),
+                     f"✓ Evaluación verificada por {nombre_user} ({user.get('rol','analista')}). "
+                     f"La madurez y respuesta del control quedan asentadas como definitivas."),
+                )
+            log_action(user["id"], user["username"], "verificar_control",
                        "respuesta", ctrl_id, f"eval={eid}", self._ip())
             self.send_json({"ok": True})
 

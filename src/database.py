@@ -151,6 +151,10 @@ def _migrate():
         "ALTER TABLE respuestas ADD COLUMN ia_madurez_sugerida INTEGER",
         "ALTER TABLE respuestas ADD COLUMN ia_comentario TEXT DEFAULT ''",
         "ALTER TABLE respuestas ADD COLUMN ia_pendiente_confirmacion INTEGER DEFAULT 0",
+        # v4 — verificación formal del analista GRC
+        "ALTER TABLE respuestas ADD COLUMN verificado INTEGER DEFAULT 0",
+        "ALTER TABLE respuestas ADD COLUMN verificado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL",
+        "ALTER TABLE respuestas ADD COLUMN verificado_en TEXT",
     ]
     new_tables = """
         CREATE TABLE IF NOT EXISTS riesgos (

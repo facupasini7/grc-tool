@@ -80,6 +80,11 @@ window.API = (() => {
       return post(`/api/evaluaciones/${evalId}/controles/${encodeURIComponent(ctrlId)}/confirmar-ia`, { confirmar });
     },
 
+    /* Verificar control (analista/admin) */
+    verificarControl(evalId, ctrlId) {
+      return post(`/api/evaluaciones/${evalId}/controles/${encodeURIComponent(ctrlId)}/verificar`, {});
+    },
+
     /* Cobertura */
     cobertura(evalId) { return get(`/api/evaluaciones/${evalId}/cobertura`); },
 
