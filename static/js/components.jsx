@@ -14,11 +14,23 @@ function Badge({ tone = "neutral", dot = false, mono = false, children, style })
   );
 }
 
+// ── Catálogo de niveles CMMI/COBIT 2019 ───────────────────────────
+const MATURITY_LEVELS = [
+  { n: 0, label: "Incompleto",     desc: "No existe / no implementado." },
+  { n: 1, label: "Inicial",        desc: "Ad-hoc y reactivo. Sin proceso definido." },
+  { n: 2, label: "Gestionado",     desc: "Repetible pero informal. Sin documentación formal." },
+  { n: 3, label: "Definido",       desc: "Documentado y estandarizado en toda la organización." },
+  { n: 4, label: "Cuantitativo",   desc: "Gestionado cuantitativamente con KPIs y métricas." },
+  { n: 5, label: "Optimizado",     desc: "Mejora continua basada en datos." },
+];
+const MATURITY_BY_N = Object.fromEntries(MATURITY_LEVELS.map(l => [l.n, l]));
+
 // ── Maturity (0–5) dots ───────────────────────────────────────────
 function Maturity({ value, showVal = true }) {
-  const v = Math.max(0, Math.min(5, value ?? 0));
+  const v   = Math.max(0, Math.min(5, value ?? 0));
+  const lvl = MATURITY_BY_N[Math.round(v)];
   return (
-    <span className="maturity" title={`Madurez ${v}/5`}>
+    <span className="maturity" title={`Nivel ${v.toFixed(1)}/5 — ${lvl.label}: ${lvl.desc}`}>
       {[1, 2, 3, 4, 5].map((i) => (
         <span key={i} className={`dot ${i <= v ? `on-${v}` : ""}`}></span>
       ))}
@@ -29,20 +41,28 @@ function Maturity({ value, showVal = true }) {
 
 // ── Maturity selector (clickable 0–5) ─────────────────────────────
 function MaturitySelector({ value, onChange, disabled }) {
+  const current = MATURITY_BY_N[value];
   return (
-    <div className="mat-row">
-      {[0, 1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          className={`mat-btn ${value === n ? `sel-${n}` : ""}`}
-          onClick={() => !disabled && onChange(n)}
-          title={`Nivel ${n}`}
-          disabled={disabled}
-        >
-          {n}
-        </button>
-      ))}
+    <div style={{ display:"flex", flexDirection:"column", gap:6, flex:1, minWidth:0 }}>
+      <div className="mat-row">
+        {MATURITY_LEVELS.map(({ n, label, desc }) => (
+          <button
+            key={n}
+            type="button"
+            className={`mat-btn ${value === n ? `sel-${n}` : ""}`}
+            onClick={() => !disabled && onChange(n)}
+            title={`${n} — ${label}: ${desc}`}
+            disabled={disabled}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      {current && !disabled && (
+        <div style={{ fontSize:11.5, color:"var(--text-muted)", lineHeight:1.4 }}>
+          <strong style={{ color:"var(--text-secondary)" }}>{current.n} — {current.label}:</strong> {current.desc}
+        </div>
+      )}
     </div>
   );
 }
@@ -261,4 +281,5 @@ Object.assign(window, {
   Badge, Maturity, MaturitySelector, Progress, KPI, Modal,
   Sidebar, Topbar, Empty, Spinner, useApi,
   fmtDate, sevTone, sevLabel, stateTone, stateLabel, roleLabel,
+  MATURITY_LEVELS, MATURITY_BY_N,
 });
