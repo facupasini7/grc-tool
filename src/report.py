@@ -31,7 +31,7 @@ FRAMEWORK_LABELS = {
     "NIST_CSF":    "NIST Cybersecurity Framework 2.0",
     "SOC2":        "SOC 2 Type II",
     "CIS":         "CIS Controls v8",
-    "A7777":       "BCRA Com. A 7777 — Riesgos de TI y SI",
+    "A7777":       "BCRA Com. A 7777 — Requisitos mínimos para la gestión y control de los riesgos de TI y SI",
     "A7783":       "BCRA Com. A 7783 — Servicios Financieros Digitales",
     "BCRA":        "BCRA Com. A 7777/7783",
     "PCI":         "PCI DSS v4.0",
