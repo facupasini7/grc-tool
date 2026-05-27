@@ -330,8 +330,8 @@ function EvidenciasInline({ evalId, ctrlId }) {
                   )}
                 </div>
               );
-            }))
-          }
+            })}
+
           <label style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 10px", border:"1.5px dashed var(--border)", borderRadius:7, fontSize:12, color:"var(--text-muted)", cursor:"pointer" }}>
             <Icon.Upload size={13}/> Subir archivo
             <input type="file" style={{ display:"none" }} onChange={upload}/>
@@ -354,7 +354,7 @@ function NuevoHallazgoModal({ ctrl, evalId, onClose }) {
   const submit = async () => {
     setLoading(true);
     try {
-      await API.crearHallazgo({ evaluacion_id: evalId, control_id: ctrl.id, titulo, descripcion: desc, severidad: sev, responsable_nombre: responsable, fecha_limite: fecha, plan_accion: plan });
+      await API.crearHallazgo(evalId, { control_id: ctrl.id, titulo, descripcion: desc, severidad: sev, responsable_nombre: responsable, fecha_limite: fecha, plan_accion: plan });
       onClose();
     } catch { alert("Error al crear hallazgo"); }
     finally { setLoading(false); }
