@@ -34,9 +34,9 @@ A lightweight, self-hosted **GRC (Governance, Risk & Compliance)** platform for 
 | `NIST_CSF` | NIST Cybersecurity Framework 2.0 — 106 controls |
 | `SOC2` | SOC 2 Type II — 57 controls |
 | `CIS` | CIS Controls v8 — 153 controls |
-| `A7777` | ISO/IEC 27701:2019 (Privacy) — 46 controls |
-| `A7783` | ISO/IEC 27783 — 9 controls |
-| `BCRA` | BCRA Com. A 7724 (Argentina) — 55 controls |
+| `A7777` | BCRA Com. A 7777 — Gestión de riesgos de TI y SI (46 controles) |
+| `A7783` | BCRA Com. A 7783 — Servicios Financieros Digitales (9 controles) |
+| `BCRA` | BCRA Com. A 7777 + A 7783 — 55 controles |
 | `PCI` | PCI DSS v4.0 — 61 controls |
 
 ---
