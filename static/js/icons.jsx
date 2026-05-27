@@ -117,6 +117,8 @@ const Icon = {
   Network:      _ico(<><rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M5 16v-2a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2"/><line x1="12" y1="8" x2="12" y2="12"/></>),
   Zap:          _ico(<><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>),
   Map:          _ico(<><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></>),
+  MessageSquare:_ico(<><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>),
+  Send:         _ico(<><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>),
 };
 
 window.Icon = Icon;

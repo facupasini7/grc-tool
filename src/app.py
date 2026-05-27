@@ -604,7 +604,7 @@ class Handler(BaseHTTPRequestHandler):
                     ).fetchall()
             self.send_json([dict(r) for r in rows])
 
-        elif path.startswith("/api/evaluaciones/") and "/controles" in path:
+        elif path.startswith("/api/evaluaciones/") and "/controles" in path and not path.endswith("/comentarios"):
             # GET /api/evaluaciones/{id}/controles[?framework=ISO27001]
             # Returns controls for the primary (or specified) framework merged with responses
             eid = int(path.split("/")[3])
@@ -681,6 +681,23 @@ class Handler(BaseHTTPRequestHandler):
                     rows = conn.execute(
                         "SELECT * FROM evidencias WHERE evaluacion_id=? ORDER BY subida_en DESC", (eid,)
                     ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        # ── Comentarios de discusión por control ──
+        elif path.startswith("/api/evaluaciones/") and "/controles/" in path and path.endswith("/comentarios"):
+            # GET /api/evaluaciones/{eid}/controles/{ctrl_id}/comentarios
+            parts    = path.split("/")
+            eid      = int(parts[3])
+            ctrl_id  = "/".join(parts[5:-1])   # handles IDs with dots
+            with get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT c.*, u.nombre AS u_nombre, u.rol AS u_rol
+                       FROM comentarios c
+                       LEFT JOIN usuarios u ON c.usuario_id = u.id
+                       WHERE c.evaluacion_id=? AND c.control_id=?
+                       ORDER BY c.creado_en ASC""",
+                    (eid, ctrl_id),
+                ).fetchall()
             self.send_json([dict(r) for r in rows])
 
         elif path.startswith("/api/evaluaciones/") and "/hallazgos" in path:
@@ -1355,6 +1372,30 @@ class Handler(BaseHTTPRequestHandler):
             log_action(user["id"], user["username"], "analizar_ia",
                        "evidencia", ev_id, f"{ctrl['id']} — {resultado.get('veredicto','?')}", self._ip())
             self.send_json(resultado)
+
+        # ── Agregar comentario de discusión a un control ──
+        elif path.startswith("/api/evaluaciones/") and "/controles/" in path and path.endswith("/comentarios"):
+            # POST /api/evaluaciones/{eid}/controles/{ctrl_id}/comentarios
+            parts   = path.split("/")
+            eid     = int(parts[3])
+            ctrl_id = "/".join(parts[5:-1])
+            texto   = (body.get("texto") or "").strip()
+            if not texto:
+                self.send_json({"error": "El comentario no puede estar vacío."}, 400); return
+            with get_conn() as conn:
+                cur = conn.execute(
+                    """INSERT INTO comentarios (evaluacion_id, control_id, usuario_id, usuario_nombre, usuario_rol, texto)
+                       VALUES (?,?,?,?,?,?)""",
+                    (eid, ctrl_id,
+                     user.get("id"), user.get("nombre") or user.get("username", "Usuario"),
+                     user.get("rol", ""),
+                     texto),
+                )
+                cid = cur.lastrowid
+                row = conn.execute("SELECT * FROM comentarios WHERE id=?", (cid,)).fetchone()
+            log_action(user["id"], user["username"], "comentario_control", "control", ctrl_id,
+                       texto[:80], self._ip())
+            self.send_json(dict(row))
 
         # ── Crear hallazgo ──
         elif path.startswith("/api/evaluaciones/") and "/hallazgos" in path:

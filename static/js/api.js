@@ -67,6 +67,10 @@ window.API = (() => {
     crearDeadline(evalId, d)      { return post(`/api/evaluaciones/${evalId}/deadlines`, d); },
     eliminarDeadline(id)          { return del(`/api/deadlines/${id}`); },
 
+    /* Comentarios de discusión por control */
+    comentariosControl(evalId, ctrlId) { return get(`/api/evaluaciones/${evalId}/controles/${encodeURIComponent(ctrlId)}/comentarios`); },
+    agregarComentario(evalId, ctrlId, texto) { return post(`/api/evaluaciones/${evalId}/controles/${encodeURIComponent(ctrlId)}/comentarios`, { texto }); },
+
     /* Evidencias */
     evidencias(evalId, ctrlId)        { return get(`/api/evaluaciones/${evalId}/evidencias${ctrlId ? "?control_id=" + ctrlId : ""}`); },
     subirEvidencia(evalId, ctrlId, d) { return post(`/api/evaluaciones/${evalId}/evidencias`, { ...d, control_id: ctrlId }); },

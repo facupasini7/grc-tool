@@ -222,6 +222,17 @@ def _migrate():
             PRIMARY KEY (id, framework)
         );
 
+        CREATE TABLE IF NOT EXISTS comentarios (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            evaluacion_id   INTEGER NOT NULL REFERENCES evaluaciones(id) ON DELETE CASCADE,
+            control_id      TEXT NOT NULL,
+            usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            usuario_nombre  TEXT NOT NULL DEFAULT 'Usuario',
+            usuario_rol     TEXT DEFAULT '',
+            texto           TEXT NOT NULL,
+            creado_en       TEXT DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS roles (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre      TEXT NOT NULL UNIQUE,

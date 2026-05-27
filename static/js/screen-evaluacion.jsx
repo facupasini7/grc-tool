@@ -131,6 +131,7 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
             resp={respuestas[ctrl.id] || { madurez: ctrl.madurez ?? 0, comentario: ctrl.comentario ?? "", aplica: ctrl.aplica ?? 1, ia_madurez_sugerida: ctrl.ia_madurez_sugerida, ia_comentario: ctrl.ia_comentario ?? "", ia_pendiente_confirmacion: ctrl.ia_pendiente_confirmacion ?? 0 }}
             saving={saving[ctrl.id]}
             evalId={evalId}
+            user={user}
             onSave={(m, c, a) => guardar(ctrl, m, c, a)}
             onNewHallazgo={() => setNewHallazgo(ctrl)}
             onReloadCtrls={reloadCtrls}
@@ -157,7 +158,7 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
   );
 }
 
-function ControlRow({ ctrl, resp, saving, evalId, onSave, onNewHallazgo, onReloadCtrls }) {
+function ControlRow({ ctrl, resp, saving, evalId, user, onSave, onNewHallazgo, onReloadCtrls }) {
   const [open,         setOpen]         = useStateE(false);
   const [comentario,   setComentario]   = useStateE(resp.comentario || "");
   const [aplica,       setAplica]       = useStateE(resp.aplica !== 0);
@@ -272,6 +273,126 @@ function ControlRow({ ctrl, resp, saving, evalId, onSave, onNewHallazgo, onReloa
               </button>
             )}
             <EvidenciasInline evalId={evalId} ctrlId={ctrl.id}/>
+          </div>
+
+          {/* ── Discusión ── */}
+          <DiscusionThread evalId={evalId} ctrlId={ctrl.id}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+const fmtDateTime = (s) => {
+  if (!s) return "—";
+  const d = new Date(s.endsWith("Z") ? s : s + "Z"); // treat as UTC
+  if (isNaN(d)) return s;
+  return d.toLocaleString("es-AR", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
+};
+
+const ROLE_SHORT = { admin:"Adm", analista:"Analista GRC", auditado:"Auditado", auditor_externo:"Auditor" };
+const ROLE_COLOR = { admin:"var(--accent)", analista:"#10b981", auditado:"#f59e0b", auditor_externo:"#6366f1" };
+
+function initials(nombre) {
+  return (nombre || "?").split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
+}
+
+// ── DiscusionThread ───────────────────────────────────────────────
+function DiscusionThread({ evalId, ctrlId }) {
+  const { data, loading, reload } = useApi(() => API.comentariosControl(evalId, ctrlId), [evalId, ctrlId]);
+  const comentarios = data || [];
+
+  const [texto,    setTexto]    = useStateE("");
+  const [enviando, setEnviando] = useStateE(false);
+  const [open,     setOpen]     = useStateE(false);
+
+  const totalComentarios = comentarios.length;
+
+  const enviar = async () => {
+    if (!texto.trim()) return;
+    setEnviando(true);
+    try {
+      await API.agregarComentario(evalId, ctrlId, texto.trim());
+      setTexto("");
+      reload();
+    } catch(e) { alert("Error al enviar comentario."); }
+    finally { setEnviando(false); }
+  };
+
+  const handleKey = (e) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) enviar();
+  };
+
+  return (
+    <div style={{ borderTop:"1px solid var(--border)", marginTop:6, paddingTop:10 }}>
+      {/* Toggle */}
+      <button className="btn btn-ghost btn-sm"
+        onClick={() => setOpen(!open)}
+        style={{ padding:"3px 8px", fontSize:12, color:"var(--text-muted)" }}>
+        <Icon.MessageSquare size={12} style={{ marginRight:4 }}/>
+        Discusión {totalComentarios > 0 && <span style={{ marginLeft:4, background:"var(--accent)", color:"#fff", borderRadius:9, padding:"1px 6px", fontSize:10.5 }}>{totalComentarios}</span>}
+        <Icon.ChevronDown size={11} style={{ marginLeft:4, transform: open?"rotate(180deg)":"none", transition:"transform .15s" }}/>
+      </button>
+
+      {open && (
+        <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:0 }}>
+
+          {/* Lista de comentarios */}
+          {loading
+            ? <div style={{ fontSize:12, color:"var(--text-muted)", padding:"6px 0" }}><Icon.Loader size={13} style={{ animation:"spin 1s linear infinite" }}/> Cargando...</div>
+            : comentarios.length === 0
+              ? <div style={{ fontSize:12, color:"var(--text-faint)", padding:"4px 0 10px" }}>Sin comentarios aún. Sé el primero.</div>
+              : comentarios.map((c, idx) => {
+                  const nombre  = c.u_nombre || c.usuario_nombre || "Usuario";
+                  const rol     = c.u_rol    || c.usuario_rol    || "";
+                  const rolLabel = ROLE_SHORT[rol] || rol;
+                  const color   = ROLE_COLOR[rol]  || "var(--text-muted)";
+                  const isLast  = idx === comentarios.length - 1;
+                  return (
+                    <div key={c.id} style={{ display:"flex", gap:10, paddingBottom: isLast ? 10 : 14, position:"relative" }}>
+                      {/* Línea de tiempo */}
+                      {!isLast && <div style={{ position:"absolute", left:14, top:30, bottom:0, width:2, background:"var(--border)" }}/>}
+                      {/* Avatar */}
+                      <div style={{ flexShrink:0, width:28, height:28, borderRadius:"50%", background:color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff", zIndex:1 }}>
+                        {initials(nombre)}
+                      </div>
+                      {/* Burbuja */}
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+                          <span style={{ fontWeight:600, fontSize:12.5, color:"var(--text-primary)" }}>{nombre}</span>
+                          {rolLabel && <span style={{ fontSize:10.5, color:color, fontWeight:600 }}>{rolLabel}</span>}
+                          <span style={{ fontSize:11, color:"var(--text-faint)" }}>{fmtDateTime(c.creado_en)}</span>
+                        </div>
+                        <div style={{ background:"var(--surface-2)", border:"1px solid var(--border)", borderRadius:"0 8px 8px 8px", padding:"8px 12px", fontSize:12.5, color:"var(--text-primary)", lineHeight:1.55, whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
+                          {c.texto}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+          }
+
+          {/* Input nuevo comentario */}
+          <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:4 }}>
+            <textarea
+              className="textarea"
+              rows={2}
+              placeholder="Escribí un comentario… (Ctrl+Enter para enviar)"
+              value={texto}
+              onChange={e => setTexto(e.target.value)}
+              onKeyDown={handleKey}
+              style={{ fontSize:13 }}
+            />
+            <div style={{ display:"flex", justifyContent:"flex-end" }}>
+              <button className="btn btn-primary btn-sm"
+                onClick={enviar}
+                disabled={enviando || !texto.trim()}>
+                {enviando
+                  ? <Icon.Loader size={12}/>
+                  : <><Icon.Send size={12}/> Enviar</>}
+              </button>
+            </div>
           </div>
         </div>
       )}
