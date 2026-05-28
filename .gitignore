@@ -20,6 +20,11 @@ grc.db
 # Generated reports & uploaded evidence
 reports/
 data/uploads/
+uploads/
+
+# Test coverage
+.coverage
+htmlcov/
 
 # Logs
 *.log

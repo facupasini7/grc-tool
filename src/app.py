@@ -583,7 +583,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             with get_conn() as conn:
                 rows = conn.execute(
-                    "SELECT id, username, nombre, rol FROM usuarios "
+                    "SELECT id, username, nombre, rol, email FROM usuarios "
                     "WHERE activo = 1 AND aprobado = 1 ORDER BY nombre"
                 ).fetchall()
             self.send_json([dict(r) for r in rows])
@@ -705,12 +705,25 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json([dict(r) for r in rows])
 
         elif path.startswith("/api/evaluaciones/") and "/hallazgos" in path:
-            if self._block_auditado(user): return
             eid = int(path.split("/")[3])
+            es_auditado = user.get("rol") == "auditado"
             with get_conn() as conn:
-                rows = conn.execute(
-                    "SELECT * FROM hallazgos WHERE evaluacion_id=? ORDER BY creado_en DESC", (eid,)
-                ).fetchall()
+                if es_auditado:
+                    # El auditado solo ve SUS hallazgos asignados y nunca los 'incompleto'
+                    rows = conn.execute(
+                        """SELECT h.*, e.nombre AS evaluacion_nombre
+                           FROM hallazgos h LEFT JOIN evaluaciones e ON h.evaluacion_id = e.id
+                           WHERE h.evaluacion_id=? AND h.responsable_id=? AND h.estado != 'incompleto'
+                           ORDER BY h.creado_en DESC""",
+                        (eid, user.get("id")),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """SELECT h.*, e.nombre AS evaluacion_nombre
+                           FROM hallazgos h LEFT JOIN evaluaciones e ON h.evaluacion_id = e.id
+                           WHERE h.evaluacion_id=? ORDER BY h.creado_en DESC""",
+                        (eid,),
+                    ).fetchall()
             self.send_json([dict(r) for r in rows])
 
         elif path.startswith("/api/evaluaciones/") and path.endswith("/asignados"):
@@ -900,6 +913,28 @@ class Handler(BaseHTTPRequestHandler):
                 ).fetchall()
             self.send_json([dict(r) for r in rows])
 
+        # ── Hilo de comentarios de un hallazgo (analista/admin + auditado) ──
+        elif path.startswith("/api/hallazgos/") and path.endswith("/comentarios"):
+            hid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM hallazgo_comentarios WHERE hallazgo_id=? ORDER BY creado_en ASC",
+                    (hid,),
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        # ── Evidencias adjuntas a un hallazgo (analista/admin + auditado) ──
+        elif path.startswith("/api/hallazgos/") and path.endswith("/evidencias"):
+            hid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    "SELECT id, hallazgo_id, usuario_id, usuario_nombre, usuario_rol, "
+                    "filename, filetype, subida_en FROM hallazgo_evidencias "
+                    "WHERE hallazgo_id=? ORDER BY subida_en DESC",
+                    (hid,),
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
         # ── Deadlines de evidencia ──
         elif path.startswith("/api/evaluaciones/") and "/deadlines" in path:
             eid = int(path.split("/")[3])
@@ -1021,11 +1056,22 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Hallazgos globales (sin filtro de eval) ──
         elif path == "/api/hallazgos":
-            if self._block_auditado(user): return
+            es_auditado = user.get("rol") == "auditado"
             with get_conn() as conn:
-                rows = conn.execute(
-                    "SELECT * FROM hallazgos ORDER BY creado_en DESC LIMIT 200"
-                ).fetchall()
+                if es_auditado:
+                    rows = conn.execute(
+                        """SELECT h.*, e.nombre AS evaluacion_nombre
+                           FROM hallazgos h LEFT JOIN evaluaciones e ON h.evaluacion_id = e.id
+                           WHERE h.responsable_id=? AND h.estado != 'incompleto'
+                           ORDER BY h.creado_en DESC LIMIT 200""",
+                        (user.get("id"),),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """SELECT h.*, e.nombre AS evaluacion_nombre
+                           FROM hallazgos h LEFT JOIN evaluaciones e ON h.evaluacion_id = e.id
+                           ORDER BY h.creado_en DESC LIMIT 200"""
+                    ).fetchall()
             self.send_json([dict(r) for r in rows])
 
         else:
@@ -1298,6 +1344,7 @@ class Handler(BaseHTTPRequestHandler):
                         control_id=ctrl_row["id"],
                         control_nombre=ctrl_row["nombre"],
                         control_descripcion=ctrl_row.get("descripcion", ""),
+                        framework=framework,
                     )
                     veredicto    = resultado.get("veredicto", "pendiente")
                     analisis_str = json.dumps(resultado, ensure_ascii=False)
@@ -1511,20 +1558,35 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_write(user):
                 return
             eid = int(path.split("/")[3])
+            # Resolver responsable a partir del id de usuario (fuente autoritativa)
+            resp_id     = body.get("responsable_id") or None
+            resp_nombre = body.get("responsable_nombre", "")
+            resp_email  = body.get("responsable_email", "")
             with get_conn() as conn:
+                if resp_id:
+                    try:
+                        u = conn.execute(
+                            "SELECT nombre, username, email FROM usuarios WHERE id=?",
+                            (int(resp_id),),
+                        ).fetchone()
+                    except (TypeError, ValueError):
+                        u = None
+                    if u:
+                        resp_nombre = u["nombre"] or u["username"]
+                        resp_email  = u["email"] or ""
                 cur = conn.execute(
                     """INSERT INTO hallazgos
                        (evaluacion_id, control_id, framework, evidencia_id, tipo, severidad,
-                        titulo, descripcion, responsable_nombre, responsable_email,
+                        titulo, descripcion, responsable_id, responsable_nombre, responsable_email,
                         fecha_limite, plan_accion, estado)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         eid, body.get("control_id", ""), body.get("framework", "ISO27001"),
                         body.get("evidencia_id"),  body.get("tipo", "no_conformidad"),
                         body.get("severidad", "media"), body.get("titulo", ""),
-                        body.get("descripcion", ""), body.get("responsable_nombre", ""),
-                        body.get("responsable_email", ""), body.get("fecha_limite", ""),
-                        body.get("plan_accion", ""), body.get("estado", "abierto"),
+                        body.get("descripcion", ""), resp_id, resp_nombre,
+                        resp_email, body.get("fecha_limite", ""),
+                        body.get("plan_accion", ""), body.get("estado", "incompleto"),
                     ),
                 )
                 hid = cur.lastrowid
@@ -1652,6 +1714,110 @@ class Handler(BaseHTTPRequestHandler):
             log_action(user["id"], user["username"], f"hallazgo_{accion}", "hallazgo", hid,
                        body.get("comentario",""), self._ip())
             self.send_json({"ok": True, "estado": nuevo_estado})
+
+        # ── Cambiar estado del hallazgo (workflow por rol) ──
+        elif path.startswith("/api/hallazgos/") and path.endswith("/estado"):
+            hid   = int(path.split("/")[3])
+            nuevo = (body.get("estado") or "").strip()
+            VALIDOS = {"incompleto", "pendiente", "implementado", "normalizado", "cerrado_no_aplica"}
+            if nuevo not in VALIDOS:
+                self.send_json({"error": "Estado inválido."}, 400); return
+            with get_conn() as conn:
+                h = conn.execute(
+                    "SELECT estado, responsable_id FROM hallazgos WHERE id=?", (hid,)
+                ).fetchone()
+            if not h:
+                self.send_json({"error": "Hallazgo no encontrado."}, 404); return
+
+            rol      = user.get("rol")
+            actual   = h["estado"]
+            es_staff = rol in ("admin", "analista")
+            permitido = False
+            if es_staff:
+                # Transición natural del auditor/analista GRC + cierre/NA desde cualquier estado
+                NATURAL = {
+                    "incompleto":   "pendiente",
+                    "implementado": "normalizado",
+                    "normalizado":  "cerrado_no_aplica",
+                }
+                if nuevo == "cerrado_no_aplica" or NATURAL.get(actual) == nuevo:
+                    permitido = True
+            elif rol == "auditado":
+                # El auditado solo marca 'implementado' sobre su hallazgo asignado en estado 'pendiente'
+                if (nuevo == "implementado" and actual == "pendiente"
+                        and h["responsable_id"] == user.get("id")):
+                    permitido = True
+
+            if not permitido:
+                self.send_json({"error": "Transición de estado no permitida para tu rol."}, 403); return
+
+            with get_conn() as conn:
+                conn.execute(
+                    "UPDATE hallazgos SET estado=?, actualizado_en=datetime('now') WHERE id=?",
+                    (nuevo, hid),
+                )
+            log_action(user["id"], user["username"], "cambiar_estado_hallazgo", "hallazgo", hid,
+                       f"{actual} → {nuevo}", self._ip())
+            self.send_json({"ok": True, "estado": nuevo})
+
+        # ── Comentario en el hilo de un hallazgo (analista/admin + auditado) ──
+        elif path.startswith("/api/hallazgos/") and path.endswith("/comentarios"):
+            hid   = int(path.split("/")[3])
+            texto = (body.get("texto") or "").strip()
+            if not texto:
+                self.send_json({"error": "El comentario no puede estar vacío."}, 400); return
+            with get_conn() as conn:
+                cur = conn.execute(
+                    """INSERT INTO hallazgo_comentarios
+                       (hallazgo_id, usuario_id, usuario_nombre, usuario_rol, texto)
+                       VALUES (?,?,?,?,?)""",
+                    (hid, user.get("id"),
+                     user.get("nombre") or user.get("username", "Usuario"),
+                     user.get("rol", ""), texto),
+                )
+                cid = cur.lastrowid
+                row = conn.execute("SELECT * FROM hallazgo_comentarios WHERE id=?", (cid,)).fetchone()
+            log_action(user["id"], user["username"], "comentario_hallazgo", "hallazgo", hid,
+                       texto[:80], self._ip())
+            self.send_json(dict(row))
+
+        # ── Subir evidencia a un hallazgo (base64 JSON; analista/admin + auditado) ──
+        elif path.startswith("/api/hallazgos/") and path.endswith("/evidencias"):
+            hid      = int(path.split("/")[3])
+            filename = body.get("filename", "archivo")
+            data_b64 = body.get("data", "")
+
+            safe_filename = re.sub(r'[^\w.\-]', '_', Path(filename).name)
+            ext = Path(safe_filename).suffix.lower()
+            if ext not in EXTENSIONES_VALIDAS:
+                self.send_json({"error": f"Extensión no soportada: {ext}"}, 400); return
+            try:
+                file_bytes = base64.b64decode(data_b64)
+            except Exception as e:
+                self.send_json({"error": f"Datos de archivo inválidos: {e}"}, 400); return
+            if len(file_bytes) > MAX_UPLOAD_BYTES:
+                self.send_json({"error": "El archivo supera el límite de 20 MB."}, 400); return
+
+            safe_name = f"{uuid.uuid4().hex}{ext}"
+            filepath  = UPLOADS_DIR / safe_name
+            try:
+                filepath.write_bytes(file_bytes)
+            except Exception as e:
+                self.send_json({"error": f"No se pudo guardar: {e}"}, 500); return
+
+            with get_conn() as conn:
+                cur = conn.execute(
+                    """INSERT INTO hallazgo_evidencias
+                       (hallazgo_id, usuario_id, usuario_nombre, usuario_rol, filename, filepath, filetype)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (hid, user.get("id"),
+                     user.get("nombre") or user.get("username", "Usuario"),
+                     user.get("rol", ""), safe_filename, str(filepath), ext),
+                )
+                ev_id = cur.lastrowid
+            log_action(user["id"], user["username"], "subir_evidencia_hallazgo",
+                       "hallazgo", hid, safe_filename, self._ip())
+            self.send_json({"id": ev_id, "filename": safe_filename})
 
         # ── Guardar excepción de control (no aplica + justificación) ──
         elif path.startswith("/api/evaluaciones/") and "/excepcion" in path:
@@ -1820,8 +1986,27 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_write(user):
                 return
             hid    = int(path.split("/")[-1])
+            # Si llega responsable_id, refrescar nombre/email desde usuarios
+            if "responsable_id" in body:
+                resp_id = body.get("responsable_id") or None
+                body["responsable_id"] = resp_id
+                if resp_id:
+                    with get_conn() as conn:
+                        try:
+                            u = conn.execute(
+                                "SELECT nombre, username, email FROM usuarios WHERE id=?",
+                                (int(resp_id),),
+                            ).fetchone()
+                        except (TypeError, ValueError):
+                            u = None
+                    if u:
+                        body["responsable_nombre"] = u["nombre"] or u["username"]
+                        body["responsable_email"]  = u["email"] or ""
+                else:
+                    body["responsable_nombre"] = ""
+                    body["responsable_email"]  = ""
             campos = ["tipo", "severidad", "titulo", "descripcion",
-                      "responsable_nombre", "responsable_email",
+                      "responsable_id", "responsable_nombre", "responsable_email",
                       "fecha_limite", "plan_accion", "estado"]
             sets = ", ".join(f"{c}=?" for c in campos if c in body)
             vals = [body[c] for c in campos if c in body]
@@ -1940,7 +2125,28 @@ class Handler(BaseHTTPRequestHandler):
 
         from auth import log_action
 
-        if "/hallazgos/" in path:
+        # ── Eliminar evidencia de un hallazgo (staff o autor de la subida) ──
+        if "/hallazgo-evidencias/" in path:
+            ev_id = int(path.split("/")[-1])
+            with get_conn() as conn:
+                ev = conn.execute(
+                    "SELECT filepath, usuario_id FROM hallazgo_evidencias WHERE id=?", (ev_id,)
+                ).fetchone()
+                if not ev:
+                    self.send_json({"error": "Evidencia no encontrada."}, 404); return
+                es_staff = user.get("rol") in ("admin", "analista")
+                if not es_staff and ev["usuario_id"] != user.get("id"):
+                    self.send_json({"error": "No tenés permiso para eliminar esta evidencia."}, 403); return
+                try:
+                    Path(ev["filepath"]).unlink(missing_ok=True)
+                except Exception:
+                    pass
+                conn.execute("DELETE FROM hallazgo_evidencias WHERE id=?", (ev_id,))
+            log_action(user["id"], user["username"], "eliminar_evidencia_hallazgo",
+                       "hallazgo_evidencia", ev_id, ip=self._ip())
+            self.send_json({"ok": True})
+
+        elif "/hallazgos/" in path:
             if not self._require_admin(user):
                 return
             hid = int(path.split("/")[-1])

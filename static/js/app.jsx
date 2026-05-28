@@ -68,8 +68,9 @@ function App() {
   const NAV = [
     { id:"home",        label:"Inicio",          icon:"Home"          },
     { id:"evaluaciones",label:"Evaluaciones",     icon:"ClipboardCheck"},
+    // El auditado solo ve Hallazgos (sus asignados); el resto es auditor-only
+    { id:"hallazgos",   label:"Hallazgos",      icon:"AlertTriangle" },
     ...(!isAuditado ? [
-      { id:"hallazgos",   label:"Hallazgos",      icon:"AlertTriangle" },
       { id:"riesgos",     label:"Riesgos",        icon:"AlertOctagon"  },
       { id:"remediacion", label:"Remediación",    icon:"Kanban"        },
       { id:"resultados",  label:"Resultados",     icon:"PieChart"      },
@@ -113,6 +114,7 @@ function App() {
         return (
           <HallazgosScreen
             evalId={evalId}
+            user={user}
             onBack={evalId ? () => go("evaluacion", evalId) : null}
           />
         );

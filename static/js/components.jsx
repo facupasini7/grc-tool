@@ -272,8 +272,16 @@ const fmtDate = (s) => {
 
 const sevTone   = (sev) => ({ critica: "danger",  alta: "warning", media: "info", baja: "success" }[sev] || "neutral");
 const sevLabel  = (sev) => ({ critica: "Crítica", alta: "Alta",    media: "Media",baja: "Baja"    }[sev] || sev);
-const stateTone = (st)  => ({ abierto:"danger", en_proceso:"warning", resuelto:"success", verificado:"info" }[st] || "neutral");
-const stateLabel = (st) => ({ abierto:"Abierto", en_proceso:"En proceso", resuelto:"Resuelto", verificado:"Verificado" }[st] || st);
+const stateTone = (st)  => ({
+  incompleto:"neutral", pendiente:"warning", implementado:"info", normalizado:"success", cerrado_no_aplica:"neutral",
+  // compatibilidad con estados antiguos
+  abierto:"danger", en_proceso:"warning", resuelto:"success", verificado:"info",
+}[st] || "neutral");
+const stateLabel = (st) => ({
+  incompleto:"Incompleto", pendiente:"Pendiente", implementado:"Implementado", normalizado:"Normalizado", cerrado_no_aplica:"Cerrado / No aplica",
+  // compatibilidad con estados antiguos
+  abierto:"Abierto", en_proceso:"En proceso", resuelto:"Resuelto", verificado:"Verificado",
+}[st] || st);
 const roleLabel = (r)   => ({ admin:"Administrador", analista:"Analista GRC", auditado:"Auditado", auditor_externo:"Auditor Externo" }[r] || r);
 
 // ── Export ────────────────────────────────────────────────────────

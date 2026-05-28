@@ -155,6 +155,8 @@ def _migrate():
         "ALTER TABLE respuestas ADD COLUMN verificado INTEGER DEFAULT 0",
         "ALTER TABLE respuestas ADD COLUMN verificado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL",
         "ALTER TABLE respuestas ADD COLUMN verificado_en TEXT",
+        # v5 — responsable formal del hallazgo (relación con usuarios)
+        "ALTER TABLE hallazgos ADD COLUMN responsable_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL",
     ]
     new_tables = """
         CREATE TABLE IF NOT EXISTS riesgos (
@@ -235,6 +237,28 @@ def _migrate():
             usuario_rol     TEXT DEFAULT '',
             texto           TEXT NOT NULL,
             creado_en       TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS hallazgo_comentarios (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            hallazgo_id     INTEGER NOT NULL REFERENCES hallazgos(id) ON DELETE CASCADE,
+            usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            usuario_nombre  TEXT NOT NULL DEFAULT 'Usuario',
+            usuario_rol     TEXT DEFAULT '',
+            texto           TEXT NOT NULL,
+            creado_en       TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS hallazgo_evidencias (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            hallazgo_id     INTEGER NOT NULL REFERENCES hallazgos(id) ON DELETE CASCADE,
+            usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            usuario_nombre  TEXT NOT NULL DEFAULT 'Usuario',
+            usuario_rol     TEXT DEFAULT '',
+            filename        TEXT NOT NULL,
+            filepath        TEXT NOT NULL,
+            filetype        TEXT DEFAULT '',
+            subida_en       TEXT DEFAULT (datetime('now'))
         );
 
         CREATE TABLE IF NOT EXISTS roles (

@@ -70,11 +70,86 @@ def _extraer_docx(path: Path) -> str:
         return "[DOCX: instalá python-docx para extraer texto]"
 
 
+# ── Guía experta por framework ────────────────────────────────────────────────
+# Conocimiento destilado de los estándares para que el analizador local (Ollama)
+# evalúe la evidencia con el criterio propio de cada marco normativo.
+# Equivalente práctico a los "GRC skills": inyecta el contexto del framework en el
+# system prompt según el control que se está analizando.
+
+FRAMEWORK_GUIDANCE = {
+    "ISO27001": (
+        "Marco: ISO/IEC 27001:2022 (SGSI). Los controles del Anexo A se agrupan en 4 temas: "
+        "Organizacionales (5.x), Personas (6.x), Físicos (7.x) y Tecnológicos (8.x). "
+        "Evaluá si la evidencia demuestra: (a) una política/procedimiento documentado y aprobado, "
+        "(b) implementación operativa real, y (c) revisión/mejora continua. "
+        "Buscá trazabilidad con el ciclo PDCA, dueños de control asignados, fechas de revisión y "
+        "registros que prueben ejecución (no solo intención). Una política sin evidencia de operación = madurez ≤ 2."
+    ),
+    "NIST_CSF": (
+        "Marco: NIST CSF 2.0. Funciones: GOVERN (GV), IDENTIFY (ID), PROTECT (PR), DETECT (DE), "
+        "RESPOND (RS), RECOVER (RC). Evaluá contra Tiers de implementación (1 Parcial → 4 Adaptativo) y "
+        "el perfil objetivo. Priorizá evidencia de gobernanza (roles, apetito de riesgo), gestión de activos, "
+        "monitoreo continuo y capacidad de respuesta/recuperación probada (ejercicios, lecciones aprendidas)."
+    ),
+    "PCI": (
+        "Marco: PCI DSS v4.0.1. 12 requisitos sobre el Cardholder Data Environment (CDE). "
+        "Verificá: segmentación de red y alcance del CDE, cifrado de PAN en tránsito y reposo, "
+        "gestión de accesos con mínimo privilegio y MFA, registro y monitoreo (req. 10), y pruebas de seguridad (req. 11). "
+        "PCI exige cumplimiento binario por requisito: evidencia parcial o sin periodicidad definida = no_cumple o parcial."
+    ),
+    "BCRA": (
+        "Marco: BCRA Com. 'A' 7777/7783 (Argentina) — requisitos mínimos para la gestión de riesgos de TI y "
+        "seguridad de la información en entidades financieras y servicios financieros digitales. "
+        "Evaluá: gobierno de TI/SI y responsabilidades del directorio, gestión de riesgos de TI, ciberseguridad, "
+        "continuidad operativa, gestión de incidentes con reporte al BCRA, y control de terceros/proveedores críticos. "
+        "Esperá evidencia formal, aprobada por nivel gerencial y con periodicidad de revisión definida."
+    ),
+    "SOC2": (
+        "Marco: SOC 2 (AICPA) — Trust Services Criteria: Security (común), Availability, Processing Integrity, "
+        "Confidentiality y Privacy. La evidencia debe demostrar que el control opera de forma efectiva durante un "
+        "período (Type II), no solo en un punto en el tiempo (Type I). Buscá controles comunes (CC1–CC9): "
+        "ambiente de control, evaluación de riesgos, monitoreo, actividades de control lógico y físico, y cambios."
+    ),
+    "CIS": (
+        "Marco: CIS Controls v8 — 18 controles priorizados en Grupos de Implementación (IG1/IG2/IG3). "
+        "Enfocate en salvaguardas concretas y medibles: inventario de activos y software, gestión de "
+        "configuración segura, gestión de vulnerabilidades, control de accesos y privilegios administrativos, "
+        "registros de auditoría y respuesta a incidentes. Preferí evidencia automatizada y verificable sobre la declarativa."
+    ),
+}
+
+
+def _guia_framework(framework: str) -> str:
+    """Devuelve la guía experta del marco normativo correspondiente."""
+    if not framework:
+        return FRAMEWORK_GUIDANCE["ISO27001"]
+    fw = framework.upper().replace("-", "_").replace(" ", "_")
+    # Coincidencia directa o por prefijo/contención (p. ej. A7777, PCI_DSS, NIST_CSF_2)
+    if fw in FRAMEWORK_GUIDANCE:
+        return FRAMEWORK_GUIDANCE[fw]
+    if fw.startswith("A77") or "BCRA" in fw:
+        return FRAMEWORK_GUIDANCE["BCRA"]
+    if "NIST" in fw:
+        return FRAMEWORK_GUIDANCE["NIST_CSF"]
+    if "PCI" in fw:
+        return FRAMEWORK_GUIDANCE["PCI"]
+    if "SOC" in fw:
+        return FRAMEWORK_GUIDANCE["SOC2"]
+    if "CIS" in fw:
+        return FRAMEWORK_GUIDANCE["CIS"]
+    if "ISO" in fw or "27001" in fw:
+        return FRAMEWORK_GUIDANCE["ISO27001"]
+    return FRAMEWORK_GUIDANCE["ISO27001"]
+
+
 # ── Prompt de auditoría ───────────────────────────────────────────────────────
 
 PROMPT_TEXTO = """Eres un auditor senior de seguridad de la información certificado (CISA, ISO 27001 Lead Auditor).
 
-Tu tarea es analizar si la evidencia proporcionada demuestra cumplimiento del siguiente control de seguridad.
+GUÍA DEL MARCO NORMATIVO APLICABLE:
+{guia_marco}
+
+Tu tarea es analizar si la evidencia proporcionada demuestra cumplimiento del siguiente control de seguridad, aplicando el criterio del marco indicado arriba.
 
 CONTROL: {control_id} — {control_nombre}
 DESCRIPCIÓN: {control_descripcion}
@@ -109,7 +184,10 @@ Responde EXACTAMENTE en este formato JSON (sin texto adicional, solo el JSON):
 
 PROMPT_IMAGEN = """Eres un auditor senior de seguridad de la información (CISA, ISO 27001 Lead Auditor).
 
-Analiza la imagen adjunta como evidencia para el siguiente control de seguridad:
+GUÍA DEL MARCO NORMATIVO APLICABLE:
+{guia_marco}
+
+Analiza la imagen adjunta como evidencia para el siguiente control de seguridad, aplicando el criterio del marco indicado arriba:
 
 CONTROL: {control_id} — {control_nombre}
 DESCRIPCIÓN: {control_descripcion}
@@ -223,9 +301,15 @@ def analizar_evidencia(
     control_id: str,
     control_nombre: str,
     control_descripcion: str,
+    framework: str = "ISO27001",
 ) -> dict:
-    """Punto de entrada principal. Devuelve dict con análisis."""
+    """Punto de entrada principal. Devuelve dict con análisis.
+
+    `framework` selecciona la guía experta del marco normativo que se inyecta
+    en el system prompt para mejorar la precisión del análisis.
+    """
     texto, es_imagen = extraer_texto(filepath, filetype)
+    guia = _guia_framework(framework)
 
     if es_imagen:
         try:
@@ -235,6 +319,7 @@ def analizar_evidencia(
             return _error_ollama(f"No se pudo leer la imagen: {e}")
 
         prompt = PROMPT_IMAGEN.format(
+            guia_marco=guia,
             control_id=control_id,
             control_nombre=control_nombre,
             control_descripcion=control_descripcion,
@@ -246,6 +331,7 @@ def analizar_evidencia(
         texto = texto[:8000] + "\n\n[... documento truncado por longitud ...]"
 
     prompt = PROMPT_TEXTO.format(
+        guia_marco=guia,
         control_id=control_id,
         control_nombre=control_nombre,
         control_descripcion=control_descripcion,

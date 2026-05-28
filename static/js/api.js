@@ -50,6 +50,13 @@ window.API = (() => {
     actualizarHallazgo(id, d)  { return put(`/api/hallazgos/${id}`, d); },
     aprobarHallazgo(id, d)     { return post(`/api/hallazgos/${id}/aprobar`, d); },
 
+    /* Colaboración por hallazgo — comentarios + evidencias */
+    hallazgoComentarios(id)         { return get(`/api/hallazgos/${id}/comentarios`); },
+    agregarHallazgoComentario(id, texto) { return post(`/api/hallazgos/${id}/comentarios`, { texto }); },
+    hallazgoEvidencias(id)          { return get(`/api/hallazgos/${id}/evidencias`); },
+    subirHallazgoEvidencia(id, d)   { return post(`/api/hallazgos/${id}/evidencias`, d); },
+    eliminarHallazgoEvidencia(id)   { return del(`/api/hallazgo-evidencias/${id}`); },
+
     /* Tareas de remediación */
     tareas(hallazgoId)         { return get(`/api/hallazgos/${hallazgoId}/tareas`); },
     crearTarea(hallazgoId, d)  { return post(`/api/hallazgos/${hallazgoId}/tareas`, d); },

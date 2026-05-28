@@ -495,16 +495,25 @@ function EvidenciasInline({ evalId, ctrlId }) {
 function NuevoHallazgoModal({ ctrl, evalId, onClose }) {
   const [titulo,      setTitulo]      = useStateE(`Brecha en ${ctrl.id}`);
   const [desc,        setDesc]        = useStateE("");
-  const [sev,         setSev]         = useStateE("media");
-  const [responsable, setResponsable] = useStateE("");
-  const [fecha,       setFecha]       = useStateE("");
-  const [plan,        setPlan]        = useStateE("");
-  const [loading,     setLoading]     = useStateE(false);
+  const [sev,           setSev]           = useStateE("media");
+  const [responsableId, setResponsableId] = useStateE("");
+  const [fecha,         setFecha]         = useStateE("");
+  const [plan,          setPlan]          = useStateE("");
+  const [loading,       setLoading]       = useStateE(false);
+  const [users,         setUsers]         = useStateE([]);
+
+  useEffectE(() => {
+    API.participantes().then(rows => setUsers(Array.isArray(rows) ? rows : [])).catch(() => setUsers([]));
+  }, []);
 
   const submit = async () => {
     setLoading(true);
     try {
-      await API.crearHallazgo(evalId, { control_id: ctrl.id, titulo, descripcion: desc, severidad: sev, responsable_nombre: responsable, fecha_limite: fecha, plan_accion: plan });
+      await API.crearHallazgo(evalId, {
+        control_id: ctrl.id, titulo, descripcion: desc, severidad: sev,
+        responsable_id: responsableId ? Number(responsableId) : null,
+        fecha_limite: fecha, plan_accion: plan,
+      });
       onClose();
     } catch { alert("Error al crear hallazgo"); }
     finally { setLoading(false); }
@@ -532,7 +541,17 @@ function NuevoHallazgoModal({ ctrl, evalId, onClose }) {
         </div>
         <div className="field"><label>Fecha límite</label><input className="input" type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/></div>
       </div>
-      <div className="field"><label>Responsable</label><input className="input" value={responsable} onChange={e=>setResponsable(e.target.value)} placeholder="Nombre del responsable"/></div>
+      <div className="field">
+        <label>Responsable</label>
+        <select className="select" value={responsableId} onChange={e=>setResponsableId(e.target.value)}>
+          <option value="">— Sin asignar —</option>
+          {users.map(u => (
+            <option key={u.id} value={String(u.id)}>
+              {(u.nombre || u.username)} · {ROLE_SHORT[u.rol] || u.rol}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="field"><label>Plan de acción</label><textarea className="textarea" rows={2} value={plan} onChange={e=>setPlan(e.target.value)} placeholder="Describí los pasos para remediar…"/></div>
     </Modal>
   );
