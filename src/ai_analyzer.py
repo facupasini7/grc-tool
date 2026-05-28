@@ -1,6 +1,15 @@
 """
-Análisis de evidencias con Ollama — llama3.2-vision:11b
-Soporta: texto plano, PDF, DOCX, imágenes (PNG/JPG/WEBP)
+Análisis de evidencias con Ollama (motor de IA local).
+Soporta cualquier evidencia: PDF, DOCX, TXT/CSV/JSON/XML e imágenes (PNG/JPG/WEBP/GIF/BMP).
+
+Ruteo por capacidad:
+  - Documentos  → se extrae el texto y lo analiza un MODELO DE TEXTO.
+  - Imágenes    → se envían en base64 a un MODELO DE VISIÓN (multimodal).
+
+Los modelos se eligen automáticamente entre los instalados, por orden de
+preferencia. Si llega una imagen y no hay ningún modelo de visión instalado,
+se devuelve un error explícito (en vez de mandarla a un modelo de texto que
+no la puede "ver").
 """
 import base64
 import json
@@ -8,11 +17,15 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_TEXT   = "llama3.2-vision:11b"
-MODEL_VISION = "llama3.2-vision:11b"   # mismo modelo, soporta ambos
+OLLAMA_BASE = "http://localhost:11434"
+OLLAMA_URL  = OLLAMA_BASE + "/api/generate"
 
-FALLBACK_MODELS = ["llama3.1:8b", "qwen2.5:7b", "qwen2.5:3b"]
+# Preferencia de modelos por capacidad (el primero instalado gana).
+# Para texto, un modelo de visión también sirve como último recurso.
+TEXT_MODELS   = ["qwen2.5:14b", "qwen2.5:7b", "llama3.1:8b", "qwen2.5:3b", "minicpm-v", "llama3.2-vision:11b"]
+VISION_MODELS = ["minicpm-v", "llama3.2-vision:11b", "llama3.2-vision", "qwen2.5vl", "llava"]
+
+MODEL_TEXT   = "llama3.1:8b"   # usado solo si no se puede consultar /api/tags
 
 
 # ── Extracción de texto ───────────────────────────────────────────────────────
@@ -222,29 +235,57 @@ Responde EXACTAMENTE en este formato JSON (sin texto adicional):
 
 # ── Llamada a Ollama ──────────────────────────────────────────────────────────
 
-def _modelo_disponible() -> str:
-    """Detecta qué modelo de Ollama está disponible."""
+def _modelos_instalados() -> list[str]:
+    """Lista los modelos instalados en Ollama (nombre completo con tag)."""
     try:
-        req = urllib.request.Request("http://localhost:11434/api/tags")
+        req = urllib.request.Request(OLLAMA_BASE + "/api/tags")
         with urllib.request.urlopen(req, timeout=3) as r:
             data = json.loads(r.read())
-        nombres = [m["name"].split(":")[0] for m in data.get("models", [])]
-        if "llama3.2-vision" in nombres:
-            return MODEL_TEXT
-        for m in FALLBACK_MODELS:
-            base = m.split(":")[0]
-            if base in nombres:
-                return m
-        # Si hay algo instalado, usar el primero
-        if data.get("models"):
-            return data["models"][0]["name"]
+        return [m["name"] for m in data.get("models", [])]
     except Exception:
-        pass
-    return MODEL_TEXT  # intento igualmente
+        return []
+
+
+def _elegir(preferidos: list[str], instalados: list[str]) -> str | None:
+    """Primer modelo preferido que esté instalado, respetando el orden de preferencia.
+
+    Un preferido con tag (p. ej. "qwen2.5:14b") exige coincidencia exacta.
+    Un preferido sin tag (p. ej. "minicpm-v") coincide con cualquier tag
+    instalado de esa base (minicpm-v:latest, etc.).
+    """
+    bases = {}
+    for n in instalados:
+        bases.setdefault(n.split(":")[0], n)
+    for p in preferidos:
+        if ":" in p:                      # tag explícito → match exacto
+            if p in instalados:
+                return p
+        elif p in bases:                  # sin tag → match por base
+            return bases[p]
+    return None
+
+
+def _seleccionar_modelo(necesita_vision: bool) -> str | None:
+    """Elige el mejor modelo instalado para el tipo de evidencia.
+
+    Devuelve None solo cuando se necesita visión y no hay ningún modelo
+    multimodal instalado (caso que el llamador convierte en error explícito).
+    """
+    instalados = _modelos_instalados()
+    if necesita_vision:
+        return _elegir(VISION_MODELS, instalados)
+    # Texto: preferidos → cualquier modelo instalado → constante de respaldo
+    return _elegir(TEXT_MODELS, instalados) or (instalados[0] if instalados else MODEL_TEXT)
 
 
 def _llamar_ollama(prompt: str, imagen_b64: str = None) -> dict:
-    modelo = _modelo_disponible()
+    necesita_vision = imagen_b64 is not None
+    modelo = _seleccionar_modelo(necesita_vision)
+    if modelo is None:
+        return _error_ollama(
+            "No hay un modelo de visión instalado para analizar imágenes. "
+            "Instalá uno con: ollama pull minicpm-v"
+        )
     payload = {
         "model": modelo,
         "prompt": prompt,
