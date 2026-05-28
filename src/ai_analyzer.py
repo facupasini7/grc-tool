@@ -292,9 +292,17 @@ def _llamar_ollama(prompt: str, imagen_b64: str = None) -> dict:
         "stream": False,
         "format": "json",
         "options": {"temperature": 0.1, "num_predict": 800},
+        # Mantener el modelo residente en memoria entre análisis (evita
+        # recargarlo en cada evidencia, costoso en GPUs chicas).
+        "keep_alive": "10m",
     }
     if imagen_b64:
         payload["images"] = [imagen_b64]
+
+    # Visión en hardware modesto puede requerir bastante tiempo en el primer
+    # análisis (carga del modelo); damos margen amplio (el análisis corre en
+    # segundo plano, no bloquea la UI).
+    timeout_s = 300 if imagen_b64 else 180
 
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -303,7 +311,7 @@ def _llamar_ollama(prompt: str, imagen_b64: str = None) -> dict:
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
+        with urllib.request.urlopen(req, timeout=timeout_s) as r:
             resp = json.loads(r.read())
         raw = resp.get("response", "{}")
         # Limpiar markdown si el modelo envuelve en ```json
