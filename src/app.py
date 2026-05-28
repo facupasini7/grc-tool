@@ -4,6 +4,7 @@ GRC Tool — servidor principal
 import json
 import os
 import re
+import sys
 import base64
 import socketserver
 import uuid
@@ -2294,10 +2295,19 @@ def main():
     from reminders import start_reminder_thread
     base_url = os.environ.get("GRC_BASE_URL", "http://localhost:8090")
     start_reminder_thread(base_url=base_url, interval_seconds=3600)
-    port = 8090
-    print(f"GRC Tool — http://localhost:{port}")
+
+    # Host/puerto configurables por entorno o argumento (útil para deploys).
+    host = os.environ.get("GRC_HOST", "0.0.0.0")   # 0.0.0.0 = todas las interfaces
+    port = int(os.environ.get("GRC_PORT", "8090"))
+    if "--port" in sys.argv:
+        try:
+            port = int(sys.argv[sys.argv.index("--port") + 1])
+        except (IndexError, ValueError):
+            pass
+
+    print(f"GRC Tool — http://localhost:{port}  (bind {host}:{port})")
     print(f"Usuario por defecto: admin / Admin1234!")
-    ThreadingServer(("", port), Handler).serve_forever()
+    ThreadingServer((host, port), Handler).serve_forever()
 
 
 if __name__ == "__main__":
