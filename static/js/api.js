@@ -117,6 +117,10 @@ window.API = (() => {
     /* Admin — config + reminders */
     configSistema()       { return get("/api/admin/config"); },
     guardarConfig(d)      { return post("/api/admin/config", d); },
+
+    /* Admin — política de seguridad (acceso / contraseñas) */
+    configSeguridad()        { return get("/api/admin/seguridad"); },
+    guardarConfigSeguridad(d){ return post("/api/admin/seguridad", d); },
     enviarRecordatorios() { return post("/api/admin/reminders/send", {}); },
     testSmtp(to)          { return post("/api/admin/config/test-smtp", to ? { to } : {}); },
 

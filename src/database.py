@@ -157,6 +157,11 @@ def _migrate():
         "ALTER TABLE respuestas ADD COLUMN verificado_en TEXT",
         # v5 — responsable formal del hallazgo (relación con usuarios)
         "ALTER TABLE hallazgos ADD COLUMN responsable_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL",
+        # v7 — política de contraseñas y bloqueo de cuenta
+        "ALTER TABLE usuarios ADD COLUMN intentos_fallidos INTEGER DEFAULT 0",
+        "ALTER TABLE usuarios ADD COLUMN bloqueado_hasta TEXT",
+        "ALTER TABLE usuarios ADD COLUMN password_cambiada_en TEXT",
+        "ALTER TABLE sesiones ADD COLUMN ultima_actividad TEXT",
     ]
     new_tables = """
         CREATE TABLE IF NOT EXISTS riesgos (

@@ -378,7 +378,7 @@ class Handler(BaseHTTPRequestHandler):
     # ── Login / Logout ────────────────────────────────────────────────────────
 
     def _handle_register(self, body):
-        from auth import hash_password
+        from auth import hash_password, validate_password_policy
         username = body.get("username", "").strip()
         password = body.get("password", "")
         nombre   = body.get("nombre", "").strip()
@@ -386,8 +386,9 @@ class Handler(BaseHTTPRequestHandler):
         if not username or not password or not nombre:
             self.send_json({"error": "Nombre, usuario y contraseña son requeridos."}, 400)
             return
-        if len(password) < 8:
-            self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+        pw_err = validate_password_policy(password)
+        if pw_err:
+            self.send_json({"error": pw_err}, 400)
             return
         try:
             with get_conn() as conn:
@@ -426,14 +427,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, "email_sent": False, "reset_url": None})
 
     def _handle_reset_password(self, body):
-        from auth import validate_reset_token, consume_reset_token, hash_password
+        from auth import (validate_reset_token, consume_reset_token, hash_password,
+                          validate_password_policy)
         token  = body.get("token", "").strip()
         new_pw = body.get("password", "")
         if not token:
             self.send_json({"error": "Token inválido."}, 400)
             return
-        if len(new_pw) < 8:
-            self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+        pw_err = validate_password_policy(new_pw)
+        if pw_err:
+            self.send_json({"error": pw_err}, 400)
             return
         uid = validate_reset_token(token)
         if not uid:
@@ -442,19 +445,34 @@ class Handler(BaseHTTPRequestHandler):
         consume_reset_token(token)
         with get_conn() as conn:
             conn.execute(
-                "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0 WHERE id=?",
+                "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0, "
+                "password_cambiada_en=datetime('now') WHERE id=?",
                 (hash_password(new_pw), uid),
             )
         self.send_json({"ok": True})
 
     def _handle_login(self, body):
-        from auth import verify_password, create_session, log_action
+        from auth import (verify_password, create_session, log_action,
+                          account_locked_until, register_failed_login,
+                          reset_failed_login, get_seg_config)
         username = body.get("username", "").strip()
         password = body.get("password", "")
 
+        # Bloqueo de cuenta por intentos fallidos
+        with get_conn() as conn:
+            locked = account_locked_until(conn, username)
+        if locked:
+            log_action(None, username, "login_bloqueado", ip=self._ip())
+            self.send_json(
+                {"error": "Cuenta bloqueada temporalmente por intentos fallidos. "
+                          "Esperá unos minutos e intentá de nuevo."}, 401
+            )
+            return
+
         with get_conn() as conn:
             row = conn.execute(
-                "SELECT id, password_hash, nombre, rol, activo, aprobado, debe_cambiar_password "
+                "SELECT id, password_hash, nombre, rol, activo, aprobado, debe_cambiar_password, "
+                "password_cambiada_en, creado_en "
                 "FROM usuarios WHERE username=?",
                 (username,),
             ).fetchone()
@@ -467,9 +485,23 @@ class Handler(BaseHTTPRequestHandler):
             if not row["aprobado"]:
                 self.send_json({"error": "Tu cuenta está pendiente de aprobación por el administrador."}, 401)
                 return
+            # Vencimiento de contraseña → forzar cambio en este login
+            debe_cambiar = row["debe_cambiar_password"]
+            expira_dias = get_seg_config()["seg_pwd_expira_dias"]
+            if expira_dias > 0:
+                ref = row.get("password_cambiada_en") or row.get("creado_en")
+                with get_conn() as conn:
+                    venc = conn.execute(
+                        "SELECT ? < datetime('now', ?) AS v",
+                        (ref, f"-{int(expira_dias)} days"),
+                    ).fetchone()
+                if ref and venc and venc["v"]:
+                    debe_cambiar = 1
+            row["debe_cambiar_password"] = debe_cambiar
             token = create_session(row["id"])
             log_action(row["id"], username, "login", ip=self._ip())
             with get_conn() as conn:
+                reset_failed_login(conn, row["id"])
                 conn.execute(
                     "UPDATE usuarios SET ultimo_login=datetime('now') WHERE id=?", (row["id"],)
                 )
@@ -479,6 +511,10 @@ class Handler(BaseHTTPRequestHandler):
                  "debe_cambiar_password": row["debe_cambiar_password"]}, cookie
             )
         else:
+            # Contar el intento fallido (solo si el usuario existe) para el bloqueo
+            if username:
+                with get_conn() as conn:
+                    register_failed_login(conn, username)
             log_action(None, username, "login_fallido", ip=self._ip())
             self.send_json({"error": "Usuario o contraseña incorrectos"}, 401)
 
@@ -1047,6 +1083,12 @@ class Handler(BaseHTTPRequestHandler):
                 rows = conn.execute("SELECT clave, valor FROM config_sistema").fetchall()
             self.send_json({r["clave"]: r["valor"] for r in rows})
 
+        # ── Política de seguridad (acceso / contraseñas) ──
+        elif path == "/api/admin/seguridad":
+            if not self._require_admin(user): return
+            from auth import get_seg_config
+            self.send_json(get_seg_config())
+
         # ── Forzar chequeo de recordatorios ──
         elif path == "/api/admin/reminders/check":
             if not self._require_admin(user): return
@@ -1117,14 +1159,16 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Cambiar contraseña propia ──
         if path == "/api/change-password":
-            from auth import hash_password as hp, verify_password as vp
+            from auth import hash_password as hp, validate_password_policy
             new_pw = body.get("password", "")
-            if len(new_pw) < 8:
-                self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+            err = validate_password_policy(new_pw)
+            if err:
+                self.send_json({"error": err}, 400)
                 return
             with get_conn() as conn:
                 conn.execute(
-                    "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0 WHERE id=?",
+                    "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0, "
+                    "password_cambiada_en=datetime('now') WHERE id=?",
                     (hp(new_pw), user["id"]),
                 )
             log_action(user["id"], user["username"], "cambiar_password", ip=self._ip())
@@ -1182,7 +1226,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/usuarios":
             if not self._require_admin(user):
                 return
-            from auth import hash_password
+            from auth import hash_password, validate_password_policy
             username = body.get("username", "").strip()
             password = body.get("password", "")
             nombre   = body.get("nombre", "").strip()
@@ -1190,8 +1234,9 @@ class Handler(BaseHTTPRequestHandler):
             if not username or not password:
                 self.send_json({"error": "username y password son requeridos"}, 400)
                 return
-            if len(password) < 8:
-                self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+            pw_err = validate_password_policy(password)
+            if pw_err:
+                self.send_json({"error": pw_err}, 400)
                 return
             rol_nuevo = body.get("rol", "analista")
             if rol_nuevo not in ("admin", "analista", "auditor_externo", "auditado"):
@@ -1851,6 +1896,14 @@ class Handler(BaseHTTPRequestHandler):
                     env_key = f"GRC_{clave.upper()}"
                     os.environ[env_key] = str(valor)
             self.send_json({"ok": True})
+
+        # ── Guardar política de seguridad ──
+        elif path == "/api/admin/seguridad":
+            if not self._require_admin(user): return
+            from auth import save_seg_config
+            cfg = save_seg_config(body)
+            log_action(user["id"], user["username"], "config_seguridad", ip=self._ip())
+            self.send_json({"ok": True, "config": cfg})
 
         # ── Forzar envío de recordatorios ──
         elif path == "/api/admin/reminders/send":

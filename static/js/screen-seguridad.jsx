@@ -435,6 +435,123 @@ function RolesTab() {
   );
 }
 
+/* ── Pestaña: Políticas de acceso ────────────────────────────────── */
+function ToggleRow({ label, hint, checked, onChange }) {
+  return (
+    <label style={{
+      display:"flex", alignItems:"center", gap:12, padding:"10px 12px",
+      borderRadius:8, cursor:"pointer", background:"var(--surface-2)",
+      border:"1px solid var(--border)"
+    }}>
+      <input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked ? 1 : 0)}
+             style={{ accentColor:"var(--accent)", width:16, height:16 }}/>
+      <div style={{ flex:1 }}>
+        <div style={{ fontSize:13, fontWeight:600, color:"var(--text-primary)" }}>{label}</div>
+        {hint && <div style={{ fontSize:11, color:"var(--text-secondary)", marginTop:1 }}>{hint}</div>}
+      </div>
+    </label>
+  );
+}
+
+function NumberRow({ label, hint, value, onChange, min = 0, max = 999, suffix }) {
+  return (
+    <div style={{
+      display:"flex", alignItems:"center", gap:12, padding:"10px 12px",
+      borderRadius:8, background:"var(--surface-2)", border:"1px solid var(--border)"
+    }}>
+      <div style={{ flex:1 }}>
+        <div style={{ fontSize:13, fontWeight:600, color:"var(--text-primary)" }}>{label}</div>
+        {hint && <div style={{ fontSize:11, color:"var(--text-secondary)", marginTop:1 }}>{hint}</div>}
+      </div>
+      <input
+        type="number" className="input" value={value} min={min} max={max}
+        onChange={e => onChange(Math.max(min, Math.min(max, parseInt(e.target.value || "0", 10))))}
+        style={{ width:90, textAlign:"center" }}
+      />
+      {suffix && <span style={{ fontSize:12, color:"var(--text-secondary)", width:54 }}>{suffix}</span>}
+    </div>
+  );
+}
+
+function PoliticasTab() {
+  const { data, loading, reload } = useApi(() => API.configSeguridad());
+  const [cfg,    setCfg]    = useStateSeg(null);
+  const [saving, setSaving] = useStateSeg(false);
+  const [msg,    setMsg]    = useStateSeg("");
+
+  useEffectSeg(() => { if (data) setCfg({ ...data }); }, [data]);
+
+  const set = (k) => (v) => setCfg(c => ({ ...c, [k]: v }));
+
+  const handleSave = async () => {
+    setSaving(true); setMsg("");
+    try {
+      const r = await API.guardarConfigSeguridad(cfg);
+      if (r.config) setCfg({ ...r.config });
+      setMsg("ok");
+      reload();
+      setTimeout(() => setMsg(""), 2500);
+    } catch (e) {
+      setMsg("err");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading || !cfg) return (
+    <div style={{ display:"flex", justifyContent:"center", padding:48 }}><Spinner/></div>
+  );
+
+  const Section = ({ icon, title, children }) => {
+    const Ic = Icon[icon];
+    return (
+      <div style={{ marginBottom:24 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+          {Ic && <Ic size={15} style={{ color:"var(--accent)" }}/>}
+          <span style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:1, color:"var(--text-secondary)" }}>{title}</span>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>{children}</div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ maxWidth:680 }}>
+      <Section icon="Key" title="Requisitos de contraseña">
+        <NumberRow label="Longitud mínima" hint="Caracteres requeridos en toda contraseña nueva."
+                   value={cfg.seg_pwd_min_len} onChange={set("seg_pwd_min_len")} min={4} max={128} suffix="caract." />
+        <ToggleRow label="Exigir mayúscula"  hint="Al menos una letra A–Z." checked={cfg.seg_pwd_mayus}   onChange={set("seg_pwd_mayus")} />
+        <ToggleRow label="Exigir minúscula"  hint="Al menos una letra a–z." checked={cfg.seg_pwd_minus}   onChange={set("seg_pwd_minus")} />
+        <ToggleRow label="Exigir número"     hint="Al menos un dígito 0–9." checked={cfg.seg_pwd_numero}  onChange={set("seg_pwd_numero")} />
+        <ToggleRow label="Exigir símbolo"    hint="Al menos un carácter especial." checked={cfg.seg_pwd_simbolo} onChange={set("seg_pwd_simbolo")} />
+        <NumberRow label="Vencimiento de contraseña" hint="Fuerza el cambio tras N días. 0 = nunca vence."
+                   value={cfg.seg_pwd_expira_dias} onChange={set("seg_pwd_expira_dias")} min={0} max={3650} suffix="días" />
+      </Section>
+
+      <Section icon="Lock" title="Bloqueo de cuenta">
+        <NumberRow label="Intentos antes de bloquear" hint="Logins fallidos consecutivos permitidos. 0 = sin bloqueo."
+                   value={cfg.seg_max_intentos} onChange={set("seg_max_intentos")} min={0} max={20} suffix="intentos" />
+        <NumberRow label="Duración del bloqueo" hint="Tiempo que la cuenta queda bloqueada."
+                   value={cfg.seg_bloqueo_min} onChange={set("seg_bloqueo_min")} min={1} max={1440} suffix="min" />
+      </Section>
+
+      <Section icon="Clock" title="Sesión">
+        <NumberRow label="Cierre por inactividad" hint="Cierra la sesión tras N minutos sin actividad. 0 = desactivado."
+                   value={cfg.seg_inactividad_min} onChange={set("seg_inactividad_min")} min={0} max={1440} suffix="min" />
+      </Section>
+
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:8 }}>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? <Spinner size={14}/> : <Icon.Check size={14}/>}
+          {saving ? "Guardando…" : "Guardar políticas"}
+        </button>
+        {msg === "ok"  && <span style={{ fontSize:13, color:"var(--success)" }}><Icon.Check size={13}/> Políticas guardadas</span>}
+        {msg === "err" && <span style={{ fontSize:13, color:"var(--danger)" }}>Error al guardar</span>}
+      </div>
+    </div>
+  );
+}
+
 /* ── Pantalla principal: Seguridad ───────────────────────────────── */
 function SeguridadScreen({ user }) {
   const [tab, setTab] = useStateSeg("usuarios");
@@ -442,6 +559,7 @@ function SeguridadScreen({ user }) {
   const tabs = [
     { id:"usuarios",  label:"Usuarios",         icon:"Users"       },
     { id:"roles",     label:"Roles y Permisos", icon:"ShieldCheck" },
+    { id:"politicas", label:"Políticas de acceso", icon:"Lock"     },
     { id:"auditoria", label:"Auditoría",         icon:"History"     },
   ];
 
@@ -490,6 +608,7 @@ function SeguridadScreen({ user }) {
       {/* Tab content */}
       {tab === "usuarios"  && <UsuariosScreen/>}
       {tab === "roles"     && <RolesTab/>}
+      {tab === "politicas" && <PoliticasTab/>}
       {tab === "auditoria" && <AuditoriaScreen/>}
     </div>
   );
