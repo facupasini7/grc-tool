@@ -592,7 +592,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path.startswith("/static/"):
             rel   = path[len("/static/"):]
-            ext   = Path(rel).suffix
+            # Anti path-traversal: resolver y exigir que quede dentro de STATIC_DIR.
+            base   = STATIC_DIR.resolve()
+            target = (base / rel).resolve()
+            if target != base and base not in target.parents:
+                self.send_response(403)
+                self.end_headers()
+                return
+            ext   = target.suffix
             tipos = {
                 ".css":  "text/css",
                 ".js":   "application/javascript",
@@ -601,7 +608,7 @@ class Handler(BaseHTTPRequestHandler):
                 ".woff2":"font/woff2",
                 ".woff": "font/woff",
             }
-            self.send_file(STATIC_DIR / rel, tipos.get(ext, "application/octet-stream"))
+            self.send_file(target, tipos.get(ext, "application/octet-stream"))
             return
 
         # ── Requiere autenticación ──
