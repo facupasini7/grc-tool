@@ -387,3 +387,60 @@ def analizar_evidencia(
         evidencia=texto or "(archivo vacío o sin texto extraíble)",
     )
     return _llamar_ollama(prompt)
+
+
+# ── TPRM: sugerencia de riesgo inherente ───────────────────────────────────────
+
+PROMPT_RIESGO_TERCERO = """Sos un analista experto en gestión de riesgos de terceros (TPRM).
+Evaluá el RIESGO INHERENTE de incorporar al siguiente proveedor, ANTES de aplicar
+controles. El riesgo inherente depende de la criticidad del servicio, la sensibilidad
+de los datos que maneja y el tipo de relación.
+
+PERFIL DEL PROVEEDOR
+- Nombre: {nombre}
+- Tipo de servicio: {tipo_servicio}
+- Criticidad declarada: {criticidad}
+- Datos que maneja: {datos_maneja}
+- Notas adicionales: {notas}
+
+Respondé EXCLUSIVAMENTE con un objeto JSON con esta forma exacta:
+{{
+  "nivel": "bajo|medio|alto|critico",
+  "justificacion": "2-3 frases explicando el nivel asignado",
+  "factores": ["factor de riesgo 1", "factor de riesgo 2"]
+}}
+
+Criterios de nivel:
+- "critico": maneja datos altamente sensibles (financieros, salud, credenciales) y es clave para la operación.
+- "alto": maneja datos personales/confidenciales o es relevante para la operación.
+- "medio": acceso limitado a datos o impacto operativo moderado.
+- "bajo": sin acceso a datos sensibles e impacto operativo menor.
+"""
+
+_NIVELES_RIESGO = {"bajo", "medio", "alto", "critico"}
+
+
+def sugerir_riesgo_inherente(perfil: dict) -> dict:
+    """Sugiere el nivel de riesgo inherente de un proveedor a partir de su perfil.
+
+    Retorna: {"nivel": str|None, "justificacion": str, "factores": list, "error": str?}
+    """
+    prompt = PROMPT_RIESGO_TERCERO.format(
+        nombre=perfil.get("nombre", "(sin nombre)"),
+        tipo_servicio=perfil.get("tipo_servicio") or "(no especificado)",
+        criticidad=perfil.get("criticidad") or "media",
+        datos_maneja=perfil.get("datos_maneja") or "(no especificado)",
+        notas=perfil.get("notas") or "(sin notas)",
+    )
+    resp = _llamar_ollama(prompt)
+    if resp.get("error"):
+        return {"nivel": None, "justificacion": resp.get("resumen", "Error de IA"),
+                "factores": [], "error": resp["error"]}
+    nivel = str(resp.get("nivel", "")).strip().lower()
+    if nivel not in _NIVELES_RIESGO:
+        nivel = None
+    return {
+        "nivel": nivel,
+        "justificacion": resp.get("justificacion", ""),
+        "factores": resp.get("factores", []) if isinstance(resp.get("factores"), list) else [],
+    }

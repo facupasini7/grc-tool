@@ -62,6 +62,16 @@ window.API = (() => {
     actualizarTarea(id, d)     { return post(`/api/tareas/${id}`, d); },
     eliminarTarea(id)          { return del(`/api/tareas/${id}`); },
 
+    /* TPRM — Gestión de riesgos de terceros */
+    proveedores()                  { return get("/api/proveedores"); },
+    proveedor(id)                  { return get(`/api/proveedores/${id}`); },
+    crearProveedor(d)              { return post("/api/proveedores", d); },
+    actualizarProveedor(id, d)     { return put(`/api/proveedores/${id}`, d); },
+    eliminarProveedor(id)          { return del(`/api/proveedores/${id}`); },
+    tprmPreguntas()                { return get("/api/tprm/preguntas"); },
+    guardarRespuestasProveedor(id, respuestas) { return post(`/api/proveedores/${id}/respuestas`, { respuestas }); },
+    sugerirRiesgoProveedor(id)     { return post(`/api/proveedores/${id}/sugerir-riesgo`, {}); },
+
     /* Riesgos */
     riesgos(evalId)         { return get(`/api/evaluaciones/${evalId}/riesgos`); },
     crearRiesgo(evalId, d)  { return post(`/api/evaluaciones/${evalId}/riesgos`, d); },
@@ -117,6 +127,10 @@ window.API = (() => {
     /* Admin — config + reminders */
     configSistema()       { return get("/api/admin/config"); },
     guardarConfig(d)      { return post("/api/admin/config", d); },
+
+    /* Admin — política de seguridad (acceso / contraseñas) */
+    configSeguridad()        { return get("/api/admin/seguridad"); },
+    guardarConfigSeguridad(d){ return post("/api/admin/seguridad", d); },
     enviarRecordatorios() { return post("/api/admin/reminders/send", {}); },
     testSmtp(to)          { return post("/api/admin/config/test-smtp", to ? { to } : {}); },
 
