@@ -256,6 +256,50 @@ def calcular_cobertura(evaluacion_id: int, framework: str):
     return {"framework": framework, "dominios": dominios_result, "controles": controles_result}
 
 
+# ── TPRM: scoring del cuestionario de terceros ─────────────────────────────────
+
+_TPRM_VALOR = {"cumple": 1.0, "parcial": 0.5, "no_cumple": 0.0}  # "na" se excluye
+
+
+def tprm_scoring(conn, proveedor_id: int) -> dict:
+    """Calcula el puntaje (0-100) y nivel de riesgo residual de un proveedor
+    a partir de sus respuestas al cuestionario, ponderado por el peso de cada pregunta."""
+    rows = conn.execute(
+        """SELECT p.peso AS peso, r.respuesta AS respuesta
+           FROM tprm_respuestas r JOIN tprm_preguntas p ON r.pregunta_id = p.id
+           WHERE r.proveedor_id = ? AND p.activa = 1""",
+        (proveedor_id,),
+    ).fetchall()
+    total_preg = conn.execute(
+        "SELECT COUNT(*) AS n FROM tprm_preguntas WHERE activa = 1"
+    ).fetchone()["n"]
+
+    peso_aplicable = 0.0
+    peso_obtenido = 0.0
+    respondidas = 0
+    for row in rows:
+        if row["respuesta"] == "na" or row["respuesta"] not in _TPRM_VALOR:
+            if row["respuesta"] == "na":
+                respondidas += 1
+            continue
+        peso = row["peso"] or 1
+        peso_aplicable += peso
+        peso_obtenido += peso * _TPRM_VALOR[row["respuesta"]]
+        respondidas += 1
+
+    if peso_aplicable <= 0:
+        return {"puntaje": None, "nivel_residual": None,
+                "respondidas": respondidas, "total": total_preg}
+
+    puntaje = round(100 * peso_obtenido / peso_aplicable)
+    if   puntaje >= 80: nivel = "bajo"
+    elif puntaje >= 60: nivel = "medio"
+    elif puntaje >= 40: nivel = "alto"
+    else:               nivel = "critico"
+    return {"puntaje": puntaje, "nivel_residual": nivel,
+            "respondidas": respondidas, "total": total_preg}
+
+
 # ── Handler HTTP ──────────────────────────────────────────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
@@ -1116,6 +1160,47 @@ class Handler(BaseHTTPRequestHandler):
                            ORDER BY h.creado_en DESC LIMIT 200"""
                     ).fetchall()
             self.send_json([dict(r) for r in rows])
+
+        # ── TPRM: catálogo de preguntas del cuestionario ──
+        elif path == "/api/tprm/preguntas":
+            if not self._require_perm(user, "tprm.ver"): return
+            with get_conn() as conn:
+                rows = conn.execute(
+                    "SELECT id, categoria, texto, peso, orden FROM tprm_preguntas "
+                    "WHERE activa=1 ORDER BY orden, id"
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        # ── TPRM: detalle de un proveedor (perfil + respuestas + scoring) ──
+        elif path.startswith("/api/proveedores/") and path.count("/") == 3:
+            if not self._require_perm(user, "tprm.ver"): return
+            pid = int(path.split("/")[3])
+            with get_conn() as conn:
+                row = conn.execute("SELECT * FROM proveedores WHERE id=?", (pid,)).fetchone()
+                if not row:
+                    self.send_json({"error": "Proveedor no encontrado"}, 404); return
+                prov = dict(row)
+                resp = conn.execute(
+                    "SELECT pregunta_id, respuesta, comentario FROM tprm_respuestas WHERE proveedor_id=?",
+                    (pid,),
+                ).fetchall()
+                prov["respuestas"] = {r["pregunta_id"]: dict(r) for r in resp}
+                prov["scoring"] = tprm_scoring(conn, pid)
+            self.send_json(prov)
+
+        # ── TPRM: listado de proveedores ──
+        elif path == "/api/proveedores":
+            if not self._require_perm(user, "tprm.ver"): return
+            with get_conn() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM proveedores ORDER BY nombre"
+                ).fetchall()
+                provs = []
+                for r in rows:
+                    d = dict(r)
+                    d["scoring"] = tprm_scoring(conn, r["id"])
+                    provs.append(d)
+            self.send_json(provs)
 
         else:
             self.send_response(404)
@@ -1999,6 +2084,79 @@ class Handler(BaseHTTPRequestHandler):
                        f"{fw_id}:{ctrl_id}", nombre, self._ip())
             self.send_json({"ok": True, "id": ctrl_id})
 
+        # ── TPRM: guardar respuestas del cuestionario de un proveedor ──
+        elif path.startswith("/api/proveedores/") and path.endswith("/respuestas"):
+            if not self._require_perm(user, "tprm.gestionar"): return
+            pid = int(path.split("/")[3])
+            respuestas = body.get("respuestas", [])  # [{pregunta_id, respuesta, comentario}]
+            VALIDAS = {"cumple", "parcial", "no_cumple", "na"}
+            with get_conn() as conn:
+                if not conn.execute("SELECT 1 FROM proveedores WHERE id=?", (pid,)).fetchone():
+                    self.send_json({"error": "Proveedor no encontrado"}, 404); return
+                for r in respuestas:
+                    resp = r.get("respuesta", "na")
+                    if resp not in VALIDAS:
+                        resp = "na"
+                    conn.execute(
+                        """INSERT INTO tprm_respuestas (proveedor_id, pregunta_id, respuesta, comentario, actualizado_en)
+                           VALUES (?,?,?,?,datetime('now'))
+                           ON CONFLICT(proveedor_id, pregunta_id)
+                           DO UPDATE SET respuesta=excluded.respuesta,
+                                         comentario=excluded.comentario,
+                                         actualizado_en=datetime('now')""",
+                        (pid, int(r["pregunta_id"]), resp, r.get("comentario", "")),
+                    )
+                conn.execute("UPDATE proveedores SET actualizado_en=datetime('now') WHERE id=?", (pid,))
+                scoring = tprm_scoring(conn, pid)
+            log_action(user["id"], user["username"], "tprm_responder", "proveedor", pid, ip=self._ip())
+            self.send_json({"ok": True, "scoring": scoring})
+
+        # ── TPRM: sugerir riesgo inherente con IA ──
+        elif path.startswith("/api/proveedores/") and path.endswith("/sugerir-riesgo"):
+            if not self._require_perm(user, "tprm.gestionar"): return
+            pid = int(path.split("/")[3])
+            with get_conn() as conn:
+                row = conn.execute("SELECT * FROM proveedores WHERE id=?", (pid,)).fetchone()
+            if not row:
+                self.send_json({"error": "Proveedor no encontrado"}, 404); return
+            from ai_analyzer import sugerir_riesgo_inherente
+            sugerencia = sugerir_riesgo_inherente(dict(row))
+            # Persistir solo si la IA devolvió un nivel válido
+            if sugerencia.get("nivel"):
+                just = sugerencia.get("justificacion", "")
+                with get_conn() as conn:
+                    conn.execute(
+                        "UPDATE proveedores SET riesgo_inherente=?, riesgo_inherente_just=?, "
+                        "actualizado_en=datetime('now') WHERE id=?",
+                        (sugerencia["nivel"], just, pid),
+                    )
+                log_action(user["id"], user["username"], "tprm_sugerir_riesgo",
+                           "proveedor", pid, sugerencia["nivel"], self._ip())
+            self.send_json(sugerencia)
+
+        # ── TPRM: crear proveedor ──
+        elif path == "/api/proveedores":
+            if not self._require_perm(user, "tprm.gestionar"): return
+            nombre = body.get("nombre", "").strip()
+            if not nombre:
+                self.send_json({"error": "El nombre del proveedor es requerido."}, 400); return
+            crit = body.get("criticidad", "media")
+            if crit not in ("baja", "media", "alta", "critica"):
+                crit = "media"
+            with get_conn() as conn:
+                cur = conn.execute(
+                    """INSERT INTO proveedores
+                       (nombre, tipo_servicio, criticidad, datos_maneja,
+                        contacto_nombre, contacto_email, estado, notas)
+                       VALUES (?,?,?,?,?,?,?,?)""",
+                    (nombre, body.get("tipo_servicio", ""), crit, body.get("datos_maneja", ""),
+                     body.get("contacto_nombre", ""), body.get("contacto_email", ""),
+                     body.get("estado", "en_evaluacion"), body.get("notas", "")),
+                )
+                pid = cur.lastrowid
+            log_action(user["id"], user["username"], "tprm_crear_proveedor", "proveedor", pid, nombre, self._ip())
+            self.send_json({"ok": True, "id": pid})
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -2059,13 +2217,14 @@ class Handler(BaseHTTPRequestHandler):
             uid = int(path.split("/")[3])
             if user["id"] != uid and not self._require_admin(user):
                 return
-            from auth import hash_password
+            from auth import hash_password, validate_password_policy
             new_pw = body.get("password", "")
-            if len(new_pw) < 8:
-                self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+            pw_err = validate_password_policy(new_pw)
+            if pw_err:
+                self.send_json({"error": pw_err}, 400)
                 return
             with get_conn() as conn:
-                conn.execute("UPDATE usuarios SET password_hash=? WHERE id=?",
+                conn.execute("UPDATE usuarios SET password_hash=?, password_cambiada_en=datetime('now') WHERE id=?",
                              (hash_password(new_pw), uid))
             self.send_json({"ok": True})
 
@@ -2087,13 +2246,15 @@ class Handler(BaseHTTPRequestHandler):
             # Cambiar contraseña si se incluye en el body
             if "password" in body and body["password"]:
                 new_pw = body["password"]
-                if len(new_pw) < 8:
-                    self.send_json({"error": "La contraseña debe tener al menos 8 caracteres."}, 400)
+                from auth import hash_password, validate_password_policy
+                pw_err = validate_password_policy(new_pw)
+                if pw_err:
+                    self.send_json({"error": pw_err}, 400)
                     return
-                from auth import hash_password
                 with get_conn() as conn:
                     conn.execute(
-                        "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0 WHERE id=?",
+                        "UPDATE usuarios SET password_hash=?, debe_cambiar_password=0, "
+                        "password_cambiada_en=datetime('now') WHERE id=?",
                         (hash_password(new_pw), uid),
                     )
             self.send_json({"ok": True})
@@ -2140,6 +2301,27 @@ class Handler(BaseHTTPRequestHandler):
             from auth import log_action
             log_action(user["id"], user["username"], "editar_control", "controles_fw",
                        f"{fw_id}:{ctrl_id}", "", self._ip())
+            self.send_json({"ok": True})
+
+        # ── TPRM: actualizar perfil de proveedor ──
+        elif path.startswith("/api/proveedores/"):
+            if not self._require_perm(user, "tprm.gestionar"): return
+            pid = int(path.split("/")[3])
+            if "criticidad" in body and body["criticidad"] not in ("baja", "media", "alta", "critica"):
+                self.send_json({"error": "Criticidad inválida."}, 400); return
+            campos = ["nombre", "tipo_servicio", "criticidad", "datos_maneja",
+                      "contacto_nombre", "contacto_email", "estado",
+                      "riesgo_inherente", "riesgo_inherente_just", "notas"]
+            sets = ", ".join(f"{c}=?" for c in campos if c in body)
+            vals = [body[c] for c in campos if c in body]
+            if sets:
+                vals.append(pid)
+                with get_conn() as conn:
+                    conn.execute(
+                        f"UPDATE proveedores SET {sets}, actualizado_en=datetime('now') WHERE id=?", vals
+                    )
+                from auth import log_action
+                log_action(user["id"], user["username"], "tprm_editar_proveedor", "proveedor", pid, ip=self._ip())
             self.send_json({"ok": True})
 
         else:
@@ -2247,6 +2429,14 @@ class Handler(BaseHTTPRequestHandler):
             did = int(path.split("/")[-1])
             with get_conn() as conn:
                 conn.execute("DELETE FROM deadlines_evidencia WHERE id=?", (did,))
+            self.send_json({"ok": True})
+
+        elif "/proveedores/" in path:
+            if not self._require_perm(user, "tprm.gestionar"): return
+            pid = int(path.split("/")[-1])
+            with get_conn() as conn:
+                conn.execute("DELETE FROM proveedores WHERE id=?", (pid,))
+            log_action(user["id"], user["username"], "tprm_eliminar_proveedor", "proveedor", pid, ip=self._ip())
             self.send_json({"ok": True})
 
         elif "/usuarios/" in path:

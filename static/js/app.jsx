@@ -75,6 +75,7 @@ function App() {
       { id:"remediacion", label:"Remediación",    icon:"Kanban"        },
       { id:"resultados",  label:"Resultados",     icon:"PieChart"      },
       { id:"cobertura",   label:"Cobertura",      icon:"Layers"        },
+      { id:"tprm",        label:"Terceros",       icon:"Building"      },
     ] : []),
     ...(isAdmin ? [
       { id:"seguridad",   label:"Seguridad",       icon:"ShieldCheck"   },
@@ -162,6 +163,8 @@ function App() {
             onBack={evalId ? () => go("evaluacion", evalId) : null}
           />
         );
+      case "tprm":
+        return <TPRMScreen user={user}/>;
       case "seguridad":
         return <SeguridadScreen user={user}/>;
       case "settings":

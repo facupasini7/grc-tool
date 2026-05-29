@@ -287,6 +287,41 @@ def _migrate():
             permiso_id TEXT    NOT NULL REFERENCES permisos(id) ON DELETE CASCADE,
             PRIMARY KEY (rol_id, permiso_id)
         );
+
+        -- ── TPRM: gestión de riesgos de terceros ──
+        CREATE TABLE IF NOT EXISTS proveedores (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre                TEXT NOT NULL,
+            tipo_servicio         TEXT DEFAULT '',
+            criticidad            TEXT DEFAULT 'media',         -- baja/media/alta/critica
+            datos_maneja          TEXT DEFAULT '',              -- tipos de datos que procesa
+            contacto_nombre       TEXT DEFAULT '',
+            contacto_email        TEXT DEFAULT '',
+            estado                TEXT DEFAULT 'en_evaluacion', -- activo/en_evaluacion/inactivo
+            riesgo_inherente      TEXT DEFAULT '',              -- bajo/medio/alto/critico
+            riesgo_inherente_just TEXT DEFAULT '',              -- justificación (IA o manual)
+            notas                 TEXT DEFAULT '',
+            creado_en             TEXT DEFAULT (datetime('now')),
+            actualizado_en        TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS tprm_preguntas (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            categoria TEXT DEFAULT '',
+            texto     TEXT NOT NULL,
+            peso      INTEGER DEFAULT 1,
+            orden     INTEGER DEFAULT 0,
+            activa    INTEGER DEFAULT 1
+        );
+
+        CREATE TABLE IF NOT EXISTS tprm_respuestas (
+            proveedor_id   INTEGER NOT NULL REFERENCES proveedores(id) ON DELETE CASCADE,
+            pregunta_id    INTEGER NOT NULL REFERENCES tprm_preguntas(id) ON DELETE CASCADE,
+            respuesta      TEXT DEFAULT 'na',   -- cumple/parcial/no_cumple/na
+            comentario     TEXT DEFAULT '',
+            actualizado_en TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (proveedor_id, pregunta_id)
+        );
     """
     with get_conn() as conn:
         for sql in migrations:
@@ -340,6 +375,9 @@ PERMISOS_CATALOGO = [
     # Riesgos
     ("riesgos.ver",         "Ver riesgos",                   "Consultar el registro de riesgos del SGSI",                   "Riesgos"),
     ("riesgos.gestionar",   "Gestionar riesgos",             "Crear, editar y actualizar tratamiento de riesgos",           "Riesgos"),
+    # Terceros (TPRM)
+    ("tprm.ver",            "Ver terceros",                  "Consultar proveedores y sus evaluaciones de riesgo",          "Terceros"),
+    ("tprm.gestionar",      "Gestionar terceros",            "Crear/editar proveedores, responder cuestionarios y evaluar", "Terceros"),
     # Remediación
     ("remediacion.ver",     "Ver remediación",               "Consultar el plan de remediación y tareas asociadas",         "Remediación"),
     ("remediacion.gestionar","Gestionar remediación",        "Crear y actualizar tareas del plan de remediación",           "Remediación"),
@@ -366,6 +404,7 @@ PERMISOS_POR_ROL = {
         "eval.ver", "eval.crear", "eval.responder",
         "hallazgos.ver", "hallazgos.gestionar", "hallazgos.crear_incumplimiento",
         "riesgos.ver", "riesgos.gestionar",
+        "tprm.ver", "tprm.gestionar",
         "remediacion.ver", "remediacion.gestionar",
         "evidencias.ver", "evidencias.subir",
         "reportes.generar",
@@ -375,6 +414,7 @@ PERMISOS_POR_ROL = {
         "eval.ver",
         "hallazgos.ver",
         "riesgos.ver",
+        "tprm.ver",
         "remediacion.ver",
         "evidencias.ver",
         "auditoria.ver",
@@ -394,9 +434,41 @@ ROLES_SISTEMA = [
 ]
 
 
+# ── Cuestionario TPRM por defecto ──────────────────────────────────────────────
+# (categoría, texto, peso). Se siembra solo si la tabla está vacía.
+TPRM_PREGUNTAS = [
+    ("Gobierno y cumplimiento", "¿El proveedor cuenta con certificaciones de seguridad vigentes (ISO 27001, SOC 2, etc.)?", 3),
+    ("Gobierno y cumplimiento", "¿Existe un contrato/acuerdo con cláusulas de seguridad y confidencialidad (NDA)?", 2),
+    ("Gobierno y cumplimiento", "¿El proveedor cumple con la normativa de protección de datos aplicable?", 3),
+    ("Seguridad de la información", "¿El proveedor tiene una política de seguridad de la información documentada?", 2),
+    ("Seguridad de la información", "¿Realiza evaluaciones periódicas de vulnerabilidades y/o pentests?", 2),
+    ("Seguridad de la información", "¿Cifra los datos sensibles en tránsito y en reposo?", 3),
+    ("Gestión de accesos", "¿Aplica control de accesos basado en roles y MFA para sus sistemas?", 2),
+    ("Gestión de accesos", "¿Revoca accesos de forma oportuna ante bajas de personal?", 1),
+    ("Protección de datos", "¿Existe segregación de los datos de la organización respecto de otros clientes?", 2),
+    ("Protección de datos", "¿El proveedor notifica incidentes de seguridad en un plazo definido?", 3),
+    ("Continuidad", "¿Cuenta con plan de continuidad del negocio y recuperación ante desastres?", 2),
+    ("Continuidad", "¿Mantiene copias de respaldo probadas periódicamente?", 1),
+    ("Subcontratación", "¿Gestiona y comunica el uso de subcontratistas (cuarta parte)?", 1),
+]
+
+
+def seed_tprm_preguntas(conn):
+    """Siembra el cuestionario de evaluación de terceros si la tabla está vacía."""
+    existe = conn.execute("SELECT id FROM tprm_preguntas LIMIT 1").fetchone()
+    if existe:
+        return
+    for orden, (cat, texto, peso) in enumerate(TPRM_PREGUNTAS):
+        conn.execute(
+            "INSERT INTO tprm_preguntas (categoria, texto, peso, orden) VALUES (?,?,?,?)",
+            (cat, texto, peso, orden),
+        )
+
+
 def seed_roles_y_permisos():
     """Inserta el catálogo de permisos y los roles sistema si no existen."""
     with get_conn() as conn:
+        seed_tprm_preguntas(conn)
         # Permisos
         for pid, label, desc, cat in PERMISOS_CATALOGO:
             conn.execute(
