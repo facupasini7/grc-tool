@@ -253,20 +253,25 @@ function HomeScreen({ onOpenEval, onNewEval, onNav, userName }) {
   const sevOrder = { critica: 0, alta: 1, media: 2, baja: 3 };
   const today = new Date();
 
+  // Estados "cerrados" (modelo nuevo + compatibilidad con el viejo).
+  // Un hallazgo está "abierto/en curso" si NO está en este conjunto.
+  const DONE_STATES = new Set(["normalizado", "cerrado_no_aplica", "resuelto", "verificado"]);
+  const isOpen = (h) => !DONE_STATES.has(h.estado);
+
   const attention = [...fList]
-    .filter(h => h.estado === "abierto" || h.estado === "en_proceso")
+    .filter(isOpen)
     .sort((a, b) => (sevOrder[a.severidad] ?? 4) - (sevOrder[b.severidad] ?? 4) || new Date(a.fecha_limite) - new Date(b.fecha_limite))
     .slice(0, 5);
 
   const in30 = new Date(); in30.setDate(today.getDate() + 30);
   const upcoming = [...fList]
-    .filter(h => h.estado !== "verificado" && h.estado !== "resuelto" && h.fecha_limite && new Date(h.fecha_limite) <= in30)
+    .filter(h => isOpen(h) && h.fecha_limite && new Date(h.fecha_limite) <= in30)
     .sort((a, b) => new Date(a.fecha_limite) - new Date(b.fecha_limite))
     .slice(0, 4);
 
   const critCount  = fList.filter(h => h.severidad === "critica").length;
   const inProgress = evList.filter(e => !e.completada).length;
-  const allFind    = fList.filter(h => h.estado === "abierto" || h.estado === "en_proceso").length;
+  const allFind    = fList.filter(isOpen).length;
   const avgMat     = evList.length
     ? (evList.reduce((s, e) => s + (e.madurez_promedio || 0), 0) / evList.length).toFixed(1)
     : "0.0";

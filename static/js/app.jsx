@@ -158,6 +158,7 @@ function App() {
         return (
           <RemediacionScreen
             evalId={evalId}
+            user={user}
             onBack={evalId ? () => go("evaluacion", evalId) : null}
           />
         );

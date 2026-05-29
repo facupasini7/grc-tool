@@ -48,7 +48,6 @@ window.API = (() => {
     hallazgos(evalId)          { return get(evalId ? `/api/evaluaciones/${evalId}/hallazgos` : "/api/hallazgos"); },
     crearHallazgo(evalId, d)   { return post(`/api/evaluaciones/${evalId}/hallazgos`, d); },
     actualizarHallazgo(id, d)  { return put(`/api/hallazgos/${id}`, d); },
-    aprobarHallazgo(id, d)     { return post(`/api/hallazgos/${id}/aprobar`, d); },
 
     /* Colaboración por hallazgo — comentarios + evidencias */
     hallazgoComentarios(id)         { return get(`/api/hallazgos/${id}/comentarios`); },

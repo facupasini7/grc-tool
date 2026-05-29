@@ -1,31 +1,65 @@
-/* global React, Icon, Badge, Spinner, useApi, fmtDate, sevTone, sevLabel, stateLabel, API */
+/* global React, Icon, Badge, Spinner, useApi, fmtDate, sevTone, sevLabel, stateLabel, stateTone, API */
 
 const { useState: useStateRem } = React;
 
-function RemediacionScreen({ evalId, onBack }) {
+/* ── Modelo de estados (espejo de screen-hallazgos.jsx) ──────────────── */
+const REM_STATES = ["incompleto", "pendiente", "implementado", "normalizado", "cerrado_no_aplica"];
+const REM_DOTS = {
+  incompleto:        "#94a3b8",
+  pendiente:         "#fbbf24",
+  implementado:      "#38bdf8",
+  normalizado:       "#4ade80",
+  cerrado_no_aplica: "#a78bfa",
+};
+const REM_DONE = new Set(["normalizado", "cerrado_no_aplica", "resuelto", "verificado"]);
+const REM_ABIERTOS = ["incompleto", "pendiente", "implementado"];
+
+/* Próximo estado natural según el rol (idéntico a nextStateForRole de Hallazgos).
+   Flujo: incompleto → pendiente → implementado → normalizado (terminal). */
+function remNextState(h, user) {
+  const rol = user?.rol;
+  const esStaff = rol === "admin" || rol === "analista";
+  if (esStaff) {
+    const NATURAL = { incompleto: "pendiente", implementado: "normalizado" };
+    return NATURAL[h.estado] || null;
+  }
+  if (rol === "auditado") {
+    if (h.estado === "pendiente" && h.responsable_id === user?.id) return "implementado";
+  }
+  return null;
+}
+
+/* El staff puede cerrar como "No aplica" desde cualquier estado abierto. */
+function remCanNoAplica(h, user) {
+  const esStaff = user?.rol === "admin" || user?.rol === "analista";
+  return esStaff && REM_ABIERTOS.includes(h.estado);
+}
+
+function RemediacionScreen({ evalId, user, onBack }) {
   const { data, loading, reload } = useApi(() => API.hallazgos(evalId), [evalId]);
 
   const hallazgos = data?.hallazgos || data || [];
 
-  const COLS = [
-    { key:"abierto",    label:"Abierto",    dot:"#f87171" },
-    { key:"en_proceso", label:"En proceso", dot:"#fbbf24" },
-    { key:"resuelto",   label:"Resuelto",   dot:"#4ade80" },
-    { key:"verificado", label:"Verificado", dot:"#818cf8" },
-  ];
+  const COLS = REM_STATES.map(key => ({ key, label: stateLabel(key), dot: REM_DOTS[key] }));
 
   const advance = async (h) => {
-    const order = ["abierto","en_proceso","resuelto","verificado"];
-    const next  = order[order.indexOf(h.estado) + 1];
+    const next = remNextState(h, user);
     if (!next) return;
     try { await API.avanzarEstado(h.id, next); reload(); }
     catch { alert("Error al actualizar estado"); }
   };
 
-  const openCount    = hallazgos.filter(h => h.estado === "abierto").length;
+  const noAplica = async (h) => {
+    if (!confirm("¿Cerrar este hallazgo como «No aplica»?\n\nUsalo cuando el hallazgo ya no aplica (p. ej. el control dejó de aplicar porque la herramienta observada ya no existe).")) return;
+    try { await API.avanzarEstado(h.id, "cerrado_no_aplica"); reload(); }
+    catch { alert("Error al actualizar estado"); }
+  };
+
+  const isOpen       = (h) => !REM_DONE.has(h.estado);
+  const openCount    = hallazgos.filter(isOpen).length;
   const critCount    = hallazgos.filter(h => h.severidad === "critica").length;
-  const overdueCount = hallazgos.filter(h => h.fecha_limite && new Date(h.fecha_limite) < new Date() && h.estado !== "verificado").length;
-  const doneCount    = hallazgos.filter(h => h.estado === "verificado" || h.estado === "resuelto").length;
+  const overdueCount = hallazgos.filter(h => h.fecha_limite && new Date(h.fecha_limite) < new Date() && isOpen(h)).length;
+  const doneCount    = hallazgos.filter(h => REM_DONE.has(h.estado)).length;
 
   return (
     <div className="page">
@@ -43,7 +77,7 @@ function RemediacionScreen({ evalId, onBack }) {
           { label:"Hallazgos abiertos",  n:openCount,    tone:"danger"  },
           { label:"Críticos",            n:critCount,    tone:"danger"  },
           { label:"Vencidos",            n:overdueCount, tone:"warning" },
-          { label:"Resueltos",           n:doneCount,    tone:"success" },
+          { label:"Cerrados",            n:doneCount,    tone:"success" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding:"16px 18px", textAlign:"center" }}>
             <div className="mono" style={{ fontSize:26, fontWeight:800, lineHeight:1, marginBottom:4, color:`var(--${s.tone})` }}>{s.n}</div>
@@ -67,7 +101,8 @@ function RemediacionScreen({ evalId, onBack }) {
                   {cards.length === 0 ? (
                     <div style={{ padding:"20px 8px", textAlign:"center", fontSize:12, color:"var(--text-muted)" }}>Sin hallazgos</div>
                   ) : cards.map(h => {
-                    const overdue = h.fecha_limite && new Date(h.fecha_limite) < new Date() && h.estado !== "verificado";
+                    const overdue = h.fecha_limite && new Date(h.fecha_limite) < new Date() && !REM_DONE.has(h.estado);
+                    const next    = remNextState(h, user);
                     return (
                       <div key={h.id} className="kanban-card">
                         <div className="kanban-card-meta">
@@ -85,11 +120,18 @@ function RemediacionScreen({ evalId, onBack }) {
                             </span>
                           )}
                         </div>
-                        {col.key !== "verificado" && (
-                          <div style={{ display:"flex", justifyContent:"flex-end" }}>
-                            <button className="btn btn-xs btn-secondary" onClick={() => advance(h)}>
-                              <Icon.ArrowRight size={10}/> {stateLabel(["abierto","en_proceso","resuelto","verificado"][["abierto","en_proceso","resuelto"].indexOf(col.key)+1])}
-                            </button>
+                        {(next || remCanNoAplica(h, user)) && (
+                          <div style={{ display:"flex", justifyContent:"flex-end", gap:6 }}>
+                            {remCanNoAplica(h, user) && (
+                              <button className="btn btn-xs btn-ghost" onClick={() => noAplica(h)} title="Cerrar como «No aplica»">
+                                <Icon.AlertOctagon size={10}/> No aplica
+                              </button>
+                            )}
+                            {next && (
+                              <button className="btn btn-xs btn-secondary" onClick={() => advance(h)}>
+                                <Icon.ArrowRight size={10}/> {stateLabel(next)}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

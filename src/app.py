@@ -346,7 +346,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _require_write(self, user):
         """admin y analista pueden escribir; auditor_externo solo lectura."""
-        if user.get("rol") in ("admin", "analista", "auditor"):
+        if user.get("rol") in ("admin", "analista"):
             return True
         self.send_json({"error": "Tu rol es de solo lectura. No podés realizar esta operación."}, 403)
         return False
@@ -1691,31 +1691,6 @@ class Handler(BaseHTTPRequestHandler):
                        f"ctrl={ctrl_id} asignado={asignado_a} fecha={fecha}", self._ip())
             self.send_json({"ok": True})
 
-        # ── Aprobar/verificar hallazgo ──
-        elif path.startswith("/api/hallazgos/") and "/aprobar" in path:
-            hid    = int(path.split("/")[3])
-            accion = body.get("accion", "aprobar")  # aprobar | verificar | rechazar
-            if accion == "verificar" and user.get("rol") not in ("admin", "auditor_externo"):
-                self.send_json({"error": "Solo auditores externos pueden verificar hallazgos."}, 403); return
-            if accion in ("aprobar","rechazar") and user.get("rol") not in ("admin","analista"):
-                self.send_json({"error": "Solo admin o analista pueden aprobar/rechazar."}, 403); return
-            mapa = {"aprobar": "resuelto", "verificar": "verificado", "rechazar": "abierto"}
-            nuevo_estado = mapa.get(accion, "resuelto")
-            with get_conn() as conn:
-                if accion == "verificar":
-                    conn.execute(
-                        "UPDATE hallazgos SET estado=?, verificado_por=?, fecha_aprobacion=datetime('now') WHERE id=?",
-                        (nuevo_estado, user["id"], hid)
-                    )
-                else:
-                    conn.execute(
-                        "UPDATE hallazgos SET estado=?, aprobado_por=?, fecha_aprobacion=datetime('now') WHERE id=?",
-                        (nuevo_estado, user["id"], hid)
-                    )
-            log_action(user["id"], user["username"], f"hallazgo_{accion}", "hallazgo", hid,
-                       body.get("comentario",""), self._ip())
-            self.send_json({"ok": True, "estado": nuevo_estado})
-
         # ── Cambiar estado del hallazgo (workflow por rol) ──
         elif path.startswith("/api/hallazgos/") and path.endswith("/estado"):
             hid   = int(path.split("/")[3])
@@ -1735,13 +1710,16 @@ class Handler(BaseHTTPRequestHandler):
             es_staff = rol in ("admin", "analista")
             permitido = False
             if es_staff:
-                # Transición natural del auditor/analista GRC + cierre/NA desde cualquier estado
+                # Flujo natural del analista GRC: incompleto → pendiente → implementado → normalizado.
+                # 'normalizado' es terminal (cierre exitoso).
                 NATURAL = {
                     "incompleto":   "pendiente",
                     "implementado": "normalizado",
-                    "normalizado":  "cerrado_no_aplica",
                 }
-                if nuevo == "cerrado_no_aplica" or NATURAL.get(actual) == nuevo:
+                # 'cerrado_no_aplica' es un cierre alternativo (el hallazgo ya no aplica):
+                # disponible desde cualquier estado ABIERTO, nunca después de 'normalizado'.
+                ABIERTOS = {"incompleto", "pendiente", "implementado"}
+                if (nuevo == "cerrado_no_aplica" and actual in ABIERTOS) or NATURAL.get(actual) == nuevo:
                     permitido = True
             elif rol == "auditado":
                 # El auditado solo marca 'implementado' sobre su hallazgo asignado en estado 'pendiente'

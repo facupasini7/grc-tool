@@ -23,18 +23,40 @@ const fileToB64Ha = (file) => new Promise((resolve, reject) => {
 /* ── Modelo de estados (workflow auditor ⇄ auditado) ──────────────────── */
 const HALLAZGO_STATES = ["incompleto","pendiente","implementado","normalizado","cerrado_no_aplica"];
 
-/* Próximo estado según el rol del usuario. Devuelve null si no puede avanzar. */
+/* Estados abiertos (en curso). 'normalizado' y 'cerrado_no_aplica' son terminales. */
+const ESTADOS_ABIERTOS_HA = ["incompleto", "pendiente", "implementado"];
+
+/* Próximo estado natural según el rol. Devuelve null si no puede avanzar.
+   Flujo: incompleto → pendiente → implementado → normalizado (terminal). */
 function nextStateForRole(h, user) {
   const rol = user?.rol;
   const esStaff = rol === "admin" || rol === "analista";
   if (esStaff) {
-    const NATURAL = { incompleto:"pendiente", implementado:"normalizado", normalizado:"cerrado_no_aplica" };
+    const NATURAL = { incompleto:"pendiente", implementado:"normalizado" };
     return NATURAL[h.estado] || null;
   }
   if (rol === "auditado") {
     if (h.estado === "pendiente" && h.responsable_id === user?.id) return "implementado";
   }
   return null;
+}
+
+/* El staff puede cerrar un hallazgo como "No aplica" desde cualquier estado abierto
+   (cierre alternativo: el control/hallazgo ya no aplica). Nunca tras 'normalizado'. */
+function canMarkNoAplica(h, user) {
+  const esStaff = user?.rol === "admin" || user?.rol === "analista";
+  return esStaff && ESTADOS_ABIERTOS_HA.includes(h.estado);
+}
+
+/* Estados que el modal de edición puede ofrecer, respetando la máquina de estados.
+   Siempre incluye el estado actual; suma el siguiente natural y el cierre «No aplica»
+   si el hallazgo está abierto. Los estados terminales no ofrecen transiciones. */
+function estadoOptions(actual) {
+  const opts = new Set([actual]);
+  const NATURAL = { incompleto: "pendiente", implementado: "normalizado" };
+  if (NATURAL[actual]) opts.add(NATURAL[actual]);
+  if (ESTADOS_ABIERTOS_HA.includes(actual)) opts.add("cerrado_no_aplica");
+  return HALLAZGO_STATES.filter(s => opts.has(s));
 }
 
 function HallazgosScreen({ evalId, onBack, user }) {
@@ -63,6 +85,14 @@ function HallazgosScreen({ evalId, onBack, user }) {
     if (!next) return;
     try {
       await API.avanzarEstado(h.id, next);
+      reload();
+    } catch { alert("Error al actualizar estado"); }
+  };
+
+  const markNoAplica = async (h) => {
+    if (!confirm("¿Cerrar este hallazgo como «No aplica»?\n\nUsalo cuando el hallazgo ya no aplica (p. ej. el control dejó de aplicar porque la herramienta observada ya no existe). Es un cierre alternativo a «Normalizado».")) return;
+    try {
+      await API.avanzarEstado(h.id, "cerrado_no_aplica");
       reload();
     } catch { alert("Error al actualizar estado"); }
   };
@@ -110,7 +140,7 @@ function HallazgosScreen({ evalId, onBack, user }) {
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           {filtered.map(h => (
-            <HallazgoCard key={h.id} h={h} user={user} onEdit={() => setEditing(h)} onAdvance={() => advanceState(h)}/>
+            <HallazgoCard key={h.id} h={h} user={user} onEdit={() => setEditing(h)} onAdvance={() => advanceState(h)} onNoAplica={() => markNoAplica(h)}/>
           ))}
         </div>
       )}
@@ -120,12 +150,13 @@ function HallazgosScreen({ evalId, onBack, user }) {
   );
 }
 
-function HallazgoCard({ h, user, onEdit, onAdvance }) {
+function HallazgoCard({ h, user, onEdit, onAdvance, onNoAplica }) {
   const [showColab, setShowColab] = useStateHa(false);
   const esAuditado = user?.rol === "auditado";
   const cerrado = h.estado === "normalizado" || h.estado === "cerrado_no_aplica";
   const overdue = h.fecha_limite && new Date(h.fecha_limite) < new Date() && !cerrado;
   const nextState = nextStateForRole(h, user);
+  const showNoAplica = canMarkNoAplica(h, user);
 
   return (
     <div className="card" style={{ borderLeft:`4px solid var(--${h.severidad==="critica"?"danger":h.severidad==="alta"?"warning":h.severidad==="media"?"info":"success"})`, borderRadius:"0 var(--radius-lg) var(--radius-lg) 0" }}>
@@ -146,6 +177,11 @@ function HallazgoCard({ h, user, onEdit, onAdvance }) {
             {nextState && (
               <button className="btn btn-sm btn-secondary" onClick={onAdvance} title={`Marcar como ${stateLabel(nextState)}`}>
                 <Icon.ArrowRight size={12}/> {stateLabel(nextState)}
+              </button>
+            )}
+            {showNoAplica && (
+              <button className="btn btn-sm btn-ghost" onClick={onNoAplica} title="Cerrar como «No aplica» (el hallazgo ya no aplica)">
+                <Icon.AlertOctagon size={12}/> No aplica
               </button>
             )}
             <button className={`btn btn-sm ${showColab ? "btn-secondary" : "btn-ghost"}`} onClick={() => setShowColab(v => !v)} title="Comentarios y evidencias">
@@ -335,13 +371,18 @@ function HallazgoEditModal({ h, onClose }) {
   const submit = async () => {
     setLoading(true);
     try {
+      // Metadatos vía PUT (sin estado).
       await API.actualizarHallazgo(h.id, {
-        titulo, descripcion: desc, severidad: sev, estado,
+        titulo, descripcion: desc, severidad: sev,
         responsable_id: responsableId ? Number(responsableId) : null,
         fecha_limite: fecha, plan_accion: plan,
       });
+      // El cambio de estado pasa por el endpoint validado (respeta la máquina de estados).
+      if (estado !== h.estado) {
+        await API.avanzarEstado(h.id, estado);
+      }
       onClose();
-    } catch { alert("Error al guardar"); }
+    } catch (e) { alert(e?.message || "Error al guardar"); }
     finally { setLoading(false); }
   };
 
@@ -369,7 +410,7 @@ function HallazgoEditModal({ h, onClose }) {
         <div className="field">
           <label>Estado</label>
           <select className="select" value={estado} onChange={e=>setEstado(e.target.value)}>
-            {HALLAZGO_STATES.map(s => <option key={s} value={s}>{stateLabel(s)}</option>)}
+            {estadoOptions(h.estado).map(s => <option key={s} value={s}>{stateLabel(s)}</option>)}
           </select>
         </div>
         <div className="field"><label>Fecha límite</label><input className="input" type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/></div>

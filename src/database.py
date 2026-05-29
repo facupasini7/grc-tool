@@ -291,6 +291,23 @@ def _migrate():
                 pass  # columna ya existe
         conn.executescript(new_tables)
 
+        # v6 — Migración de datos: estados de hallazgo del modelo viejo
+        # (abierto/en_proceso/resuelto/verificado) al nuevo modelo de 5 estados.
+        # Idempotente: si no quedan estados viejos, no hace nada.
+        _ESTADO_LEGADO = {
+            "abierto":    "pendiente",
+            "en_proceso": "implementado",
+            "resuelto":   "normalizado",
+            "verificado": "normalizado",
+        }
+        for viejo, nuevo in _ESTADO_LEGADO.items():
+            try:
+                conn.execute(
+                    "UPDATE hallazgos SET estado=? WHERE estado=?", (nuevo, viejo)
+                )
+            except Exception:
+                pass
+
         # Si el admin aún tiene la contraseña por defecto y no tiene el flag,
         # activarlo para que se le pida el cambio en el próximo login.
         row = conn.execute(
