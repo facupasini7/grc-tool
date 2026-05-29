@@ -162,7 +162,7 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
   return (
     <Modal open={true} size="lg" onClose={onClose}
            title={isNew ? "Nuevo proveedor" : (prov?.nombre || "Proveedor")}
-           sub={isNew ? "Registrá un tercero para evaluar su riesgo" : "Evaluación de riesgo de tercero">
+           sub={isNew ? "Registrá un tercero para evaluar su riesgo" : "Evaluación de riesgo de tercero"}>
       {loading ? <Spinner/> : (
         <div>
           {/* Tabs */}
