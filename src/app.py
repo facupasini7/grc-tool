@@ -1178,6 +1178,18 @@ class Handler(BaseHTTPRequestHandler):
                 ).fetchall()
             self.send_json([dict(r) for r in rows])
 
+        # ── TPRM: hilo de comentarios/actividad de un proveedor ──
+        elif path.startswith("/api/proveedores/") and path.endswith("/comentarios"):
+            if not self._require_perm(user, "tprm.ver"): return
+            pid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT id, usuario_id, usuario_nombre, usuario_rol, texto, creado_en
+                       FROM proveedor_comentarios WHERE proveedor_id=? ORDER BY creado_en ASC, id ASC""",
+                    (pid,),
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
         # ── TPRM: detalle de un proveedor (perfil + respuestas + scoring) ──
         elif path.startswith("/api/proveedores/") and path.count("/") == 3:
             if not self._require_perm(user, "tprm.ver"): return
@@ -1757,7 +1769,8 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_write(user): return
             rid = int(path.split("/")[3])
             campos = ["descripcion","probabilidad","impacto","tratamiento",
-                      "propietario_id","riesgo_residual","estado","notas","control_id"]
+                      "propietario_id","riesgo_residual","estado","notas","control_id",
+                      "evaluacion_id"]
             sets = ", ".join(f"{c}=?" for c in campos if c in body)
             vals = [body[c] for c in campos if c in body]
             if sets:
@@ -2131,15 +2144,48 @@ class Handler(BaseHTTPRequestHandler):
             # Persistir solo si la IA devolvió un nivel válido
             if sugerencia.get("nivel"):
                 just = sugerencia.get("justificacion", "")
+                _NIV_LABEL = {"bajo": "Bajo", "medio": "Medio", "alto": "Alto", "critico": "Crítico"}
+                texto_coment = (
+                    f"🔎 Análisis de riesgo inherente — nivel sugerido: "
+                    f"{_NIV_LABEL.get(sugerencia['nivel'], sugerencia['nivel'])}.\n\n{just}".strip()
+                )
                 with get_conn() as conn:
                     conn.execute(
                         "UPDATE proveedores SET riesgo_inherente=?, riesgo_inherente_just=?, "
                         "actualizado_en=datetime('now') WHERE id=?",
                         (sugerencia["nivel"], just, pid),
                     )
+                    # Dejar constancia del análisis como comentario (con fecha/hora) en el hilo.
+                    conn.execute(
+                        """INSERT INTO proveedor_comentarios
+                           (proveedor_id, usuario_id, usuario_nombre, usuario_rol, texto)
+                           VALUES (?,?,?,?,?)""",
+                        (pid, user["id"], "Asistente IA", "ia", texto_coment),
+                    )
                 log_action(user["id"], user["username"], "tprm_sugerir_riesgo",
                            "proveedor", pid, sugerencia["nivel"], self._ip())
             self.send_json(sugerencia)
+
+        # ── TPRM: agregar comentario manual al hilo de un proveedor ──
+        elif path.startswith("/api/proveedores/") and path.endswith("/comentarios"):
+            if not self._require_perm(user, "tprm.gestionar"): return
+            pid = int(path.split("/")[3])
+            texto = (body.get("texto") or "").strip()
+            if not texto:
+                self.send_json({"error": "El comentario no puede estar vacío."}, 400); return
+            with get_conn() as conn:
+                if not conn.execute("SELECT 1 FROM proveedores WHERE id=?", (pid,)).fetchone():
+                    self.send_json({"error": "Proveedor no encontrado"}, 404); return
+                cur = conn.execute(
+                    """INSERT INTO proveedor_comentarios
+                       (proveedor_id, usuario_id, usuario_nombre, usuario_rol, texto)
+                       VALUES (?,?,?,?,?)""",
+                    (pid, user["id"], user.get("nombre") or user["username"],
+                     user.get("rol", ""), texto),
+                )
+                cid = cur.lastrowid
+            log_action(user["id"], user["username"], "tprm_comentar", "proveedor", pid, ip=self._ip())
+            self.send_json({"ok": True, "id": cid})
 
         # ── TPRM: crear proveedor ──
         elif path == "/api/proveedores":

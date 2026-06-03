@@ -71,6 +71,8 @@ window.API = (() => {
     tprmPreguntas()                { return get("/api/tprm/preguntas"); },
     guardarRespuestasProveedor(id, respuestas) { return post(`/api/proveedores/${id}/respuestas`, { respuestas }); },
     sugerirRiesgoProveedor(id)     { return post(`/api/proveedores/${id}/sugerir-riesgo`, {}); },
+    proveedorComentarios(id)       { return get(`/api/proveedores/${id}/comentarios`); },
+    agregarProveedorComentario(id, texto) { return post(`/api/proveedores/${id}/comentarios`, { texto }); },
 
     /* Riesgos */
     riesgos(evalId)         { return get(`/api/evaluaciones/${evalId}/riesgos`); },

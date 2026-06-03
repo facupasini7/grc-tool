@@ -26,6 +26,23 @@ const riesgoLabel = (n) => ({ bajo:"Bajo", medio:"Medio", alto:"Alto", critico:"
 const critLabel   = (c) => (TPRM_CRITICIDAD.find(x => x.v === c)?.label || c);
 const estadoLabel = (e) => (TPRM_ESTADOS.find(x => x.v === e)?.label || e);
 
+/* Fuente del cuestionario (se muestra como nota en la pestaña Cuestionario) */
+const TPRM_FUENTE =
+  "Cuestionario basado en ISO/IEC 27001:2022 (controles A.5.19–A.5.23 — Relaciones con proveedores), " +
+  "ISO/IEC 27036 (seguridad en relaciones con proveedores) y buenas prácticas de evaluación de terceros " +
+  "(NIST CSF, NIST SP 800-161 y el cuestionario estándar SIG de Shared Assessments).";
+
+/* Helpers de actividad/comentarios (autocontenidos) */
+const ROLE_SHORT_TP = { admin:"Admin", analista:"Analista GRC", auditado:"Auditado", auditor_externo:"Auditor", ia:"IA Local" };
+const ROLE_COLOR_TP = { admin:"var(--accent)", analista:"#10b981", auditado:"#f59e0b", auditor_externo:"#6366f1", ia:"#a855f7" };
+const initialsTp = (n) => (n || "?").split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
+const fmtDateTimeTp = (s) => {
+  if (!s) return "";
+  const d = new Date(s.includes("T") || s.includes(" ") ? s.replace(" ", "T") + (s.includes("Z") ? "" : "Z") : s);
+  if (isNaN(d)) return s;
+  return d.toLocaleString("es-AR", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
+};
+
 /* Anillo de puntaje */
 function ScoreRing({ puntaje, nivel, size = 64 }) {
   if (puntaje == null) {
@@ -64,6 +81,16 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
   const [iaLoading, setIaLoading] = useStateTprm(false);
   const [iaError, setIaError] = useStateTprm("");
   const [error, setError] = useStateTprm("");
+  const [comentarios, setComentarios] = useStateTprm([]);
+  const [comTexto, setComTexto] = useStateTprm("");
+  const [comEnviando, setComEnviando] = useStateTprm(false);
+
+  const cargarComentarios = () => {
+    if (isNew) return;
+    API.proveedorComentarios(proveedorId)
+      .then(cs => setComentarios(Array.isArray(cs) ? cs : []))
+      .catch(() => {});
+  };
 
   /* Formulario de perfil */
   const [form, setForm] = useStateTprm({
@@ -89,6 +116,9 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
       setRespuestas(p.respuestas || {});
       setLoading(false);
     }).catch(() => { if (alive) { setError("No se pudo cargar el proveedor"); setLoading(false); } });
+    API.proveedorComentarios(proveedorId)
+      .then(cs => { if (alive) setComentarios(Array.isArray(cs) ? cs : []); })
+      .catch(() => {});
     return () => { alive = false; };
   }, [proveedorId]);
 
@@ -139,12 +169,27 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
         setIaError(r.justificacion || r.error || "La IA no devolvió una sugerencia válida.");
       } else {
         setForm(f => ({ ...f, riesgo_inherente:r.nivel, riesgo_inherente_just:r.justificacion || "" }));
+        cargarComentarios();   // el backend dejó el análisis como comentario fechado
         onChanged();
       }
     } catch (e) {
       setIaError("No se pudo contactar al motor de IA. ¿Está corriendo Ollama?");
     } finally {
       setIaLoading(false);
+    }
+  };
+
+  const enviarComentario = async () => {
+    if (!comTexto.trim()) return;
+    setComEnviando(true);
+    try {
+      await API.agregarProveedorComentario(proveedorId, comTexto.trim());
+      setComTexto("");
+      cargarComentarios();
+    } catch (e) {
+      setError(e.message || "No se pudo enviar el comentario");
+    } finally {
+      setComEnviando(false);
     }
   };
 
@@ -240,18 +285,28 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
                     <option value="critico">Crítico</option>
                   </select>
                 )}
-                {form.riesgo_inherente_just && (
-                  <p style={{ margin:"4px 0 0", fontSize:12.5, color:"var(--text-secondary)", fontStyle:"italic" }}>
-                    {form.riesgo_inherente_just}
-                  </p>
-                )}
                 {iaError && <p style={{ margin:"6px 0 0", fontSize:12, color:"var(--danger)" }}>{iaError}</p>}
                 {isNew && (
                   <p style={{ margin:"4px 0 0", fontSize:11.5, color:"var(--text-muted)" }}>
                     Guardá el proveedor para poder pedir la sugerencia de IA.
                   </p>
                 )}
+                {!isNew && (
+                  <p style={{ margin:"4px 0 0", fontSize:11.5, color:"var(--text-muted)" }}>
+                    El análisis de la IA queda registrado abajo en la actividad, con fecha y hora.
+                  </p>
+                )}
               </div>
+
+              {/* Actividad / comentarios del proveedor */}
+              {!isNew && (
+                <ProveedorActividad
+                  comentarios={comentarios}
+                  texto={comTexto} setTexto={setComTexto}
+                  enviando={comEnviando} onEnviar={enviarComentario}
+                  canManage={canManage}
+                />
+              )}
 
               {error && <div style={{ padding:"8px 12px", borderRadius:8, background:"var(--danger-bg)", color:"var(--danger)", fontSize:13 }}>{error}</div>}
 
@@ -269,6 +324,15 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
 
           {tab === "cuestionario" && (
             <div>
+              {/* Fuente / base normativa del cuestionario */}
+              <div style={{ display:"flex", gap:10, alignItems:"flex-start", background:"var(--surface-2)",
+                            border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
+                <Icon.Info size={15} style={{ color:"var(--accent)", flexShrink:0, marginTop:2 }}/>
+                <p style={{ margin:0, fontSize:12, color:"var(--text-secondary)", lineHeight:1.5 }}>
+                  {TPRM_FUENTE}
+                </p>
+              </div>
+
               {/* Scoring resumen */}
               <div style={{ display:"flex", alignItems:"center", gap:16, background:"var(--surface-2)",
                             border:"1px solid var(--border)", borderRadius:10, padding:14, marginBottom:18 }}>
@@ -353,6 +417,65 @@ function Campo({ label, children }) {
     <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
       <label style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)" }}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+/* ── Actividad / hilo de comentarios del proveedor ───────────────── */
+function ProveedorActividad({ comentarios, texto, setTexto, enviando, onEnviar, canManage }) {
+  const handleKey = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) onEnviar(); };
+  const lista = Array.isArray(comentarios) ? comentarios : [];
+  return (
+    <div style={{ border:"1px solid var(--border)", borderRadius:10, padding:14 }}>
+      <div style={{ fontSize:10.5, fontWeight:700, color:"var(--text-muted)", textTransform:"uppercase",
+                    letterSpacing:".06em", marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>
+        <Icon.MessageSquare size={12}/> Actividad {lista.length > 0 && `(${lista.length})`}
+      </div>
+
+      {lista.length === 0 ? (
+        <div style={{ fontSize:12, color:"var(--text-faint)", marginBottom:10 }}>
+          Sin actividad aún. Pedí una sugerencia de IA o dejá una nota.
+        </div>
+      ) : lista.map((c, idx) => {
+        const rol    = c.usuario_rol || "";
+        const color  = ROLE_COLOR_TP[rol] || "var(--text-muted)";
+        const isLast = idx === lista.length - 1;
+        return (
+          <div key={c.id} style={{ display:"flex", gap:10, paddingBottom: isLast ? 10 : 14, position:"relative" }}>
+            {!isLast && <div style={{ position:"absolute", left:14, top:30, bottom:0, width:2, background:"var(--border)" }}/>}
+            <div style={{ flexShrink:0, width:28, height:28, borderRadius:"50%", background:color,
+                          display:"flex", alignItems:"center", justifyContent:"center", fontSize:11,
+                          fontWeight:700, color:"#fff", zIndex:1 }}>
+              {rol === "ia" ? <Icon.Sparkles size={14}/> : initialsTp(c.usuario_nombre)}
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+                <span style={{ fontWeight:600, fontSize:12.5, color:"var(--text-primary)" }}>{c.usuario_nombre}</span>
+                {rol && <span style={{ fontSize:10.5, color, fontWeight:600 }}>{ROLE_SHORT_TP[rol] || rol}</span>}
+                <span style={{ fontSize:11, color:"var(--text-faint)" }}>{fmtDateTimeTp(c.creado_en)}</span>
+              </div>
+              <div style={{ background:"var(--surface-2)", border:"1px solid var(--border)", borderRadius:"0 8px 8px 8px",
+                            padding:"8px 12px", fontSize:12.5, color:"var(--text-primary)", lineHeight:1.55,
+                            whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
+                {c.texto}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {canManage && (
+        <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:4 }}>
+          <textarea className="input" rows={2} placeholder="Escribí una nota… (Ctrl+Enter para enviar)"
+                    value={texto} onChange={e => setTexto(e.target.value)} onKeyDown={handleKey}
+                    style={{ fontSize:13, resize:"vertical" }}/>
+          <div style={{ display:"flex", justifyContent:"flex-end" }}>
+            <button className="btn btn-primary btn-sm" onClick={onEnviar} disabled={enviando || !texto.trim()}>
+              {enviando ? <Spinner size={12}/> : <><Icon.Check size={12}/> Comentar</>}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

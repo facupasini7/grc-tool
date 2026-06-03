@@ -105,12 +105,15 @@ function HeatMap({ riesgos }) {
 }
 
 /* ── Modal crear/editar riesgo ────────────────────────────────── */
-function RiesgoModal({ open, onClose, evalId, editing, participantes }) {
+function RiesgoModal({ open, onClose, evalId, editing, participantes, evaluaciones }) {
   const [form, setForm] = useStateR({
     descripcion:"", probabilidad:3, impacto:3,
     tratamiento:"mitigar", propietario_id:"", notas:"", control_id:"",
+    evaluacion_id:"",
   });
   const [saving, setSaving] = useStateR(false);
+  const [controles, setControles] = useStateR([]);
+  const [cargandoCtrl, setCargandoCtrl] = useStateR(false);
 
   useEffectR(() => {
     if (editing) setForm({
@@ -121,25 +124,49 @@ function RiesgoModal({ open, onClose, evalId, editing, participantes }) {
       propietario_id:editing.propietario_id|| "",
       notas:         editing.notas         || "",
       control_id:    editing.control_id    || "",
+      evaluacion_id: editing.evaluacion_id || evalId || "",
     });
     else setForm({ descripcion:"", probabilidad:3, impacto:3,
-      tratamiento:"mitigar", propietario_id:"", notas:"", control_id:"" });
-  }, [editing, open]);
+      tratamiento:"mitigar", propietario_id:"", notas:"", control_id:"",
+      evaluacion_id: evalId || "" });
+  }, [editing, open, evalId]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const score = form.probabilidad * form.impacto;
 
+  /* Cargar los controles de la evaluación elegida para el desplegable */
+  useEffectR(() => {
+    if (!open || !form.evaluacion_id) { setControles([]); return; }
+    let alive = true;
+    setCargandoCtrl(true);
+    API.controles(form.evaluacion_id)
+      .then(cs => {
+        const arr = Array.isArray(cs) ? cs : (Array.isArray(cs?.controles) ? cs.controles : []);
+        if (alive) setControles(arr);
+      })
+      .catch(() => { if (alive) setControles([]); })
+      .finally(() => { if (alive) setCargandoCtrl(false); });
+    return () => { alive = false; };
+  }, [open, form.evaluacion_id]);
+
   const submit = async () => {
     if (!form.descripcion.trim()) return;
+    if (!form.evaluacion_id) { alert("Seleccioná la evaluación a la que pertenece el riesgo."); return; }
     setSaving(true);
     try {
       const d = { ...form, probabilidad: +form.probabilidad, impacto: +form.impacto,
-                  propietario_id: form.propietario_id || null };
+                  propietario_id: form.propietario_id || null,
+                  evaluacion_id: +form.evaluacion_id };
       if (editing) await API.actualizarRiesgo(editing.id, d);
-      else         await API.crearRiesgo(evalId, d);
+      else         await API.crearRiesgo(form.evaluacion_id, d);
       onClose(true);
     } catch { alert("Error al guardar."); }
     finally { setSaving(false); }
+  };
+
+  const fwLabel = (ev) => {
+    try { const fws = JSON.parse(ev.frameworks || "[]"); return fws.length ? fws.join(" · ") : ""; }
+    catch { return ""; }
   };
 
   return (
@@ -153,6 +180,19 @@ function RiesgoModal({ open, onClose, evalId, editing, participantes }) {
         </button>
       </>}
     >
+      <div className="field">
+        <label>Evaluación *</label>
+        <select className="select" value={form.evaluacion_id}
+          onChange={e => { set("evaluacion_id", e.target.value); set("control_id", ""); }}>
+          <option value="">— Seleccioná una evaluación —</option>
+          {(evaluaciones || []).map(ev => (
+            <option key={ev.id} value={ev.id}>
+              {ev.nombre}{fwLabel(ev) ? ` — ${fwLabel(ev)}` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="field">
         <label>Descripción del riesgo *</label>
         <textarea className="input" rows={3} value={form.descripcion}
@@ -202,10 +242,20 @@ function RiesgoModal({ open, onClose, evalId, editing, participantes }) {
       </div>
 
       <div className="field">
-        <label>Control ISO 27001 relacionado</label>
-        <input className="input" value={form.control_id}
+        <label>Control relacionado</label>
+        <select className="select" value={form.control_id}
           onChange={e => set("control_id", e.target.value)}
-          placeholder="Ej: A.5.1 (opcional)"/>
+          disabled={!form.evaluacion_id || cargandoCtrl}>
+          <option value="">
+            {!form.evaluacion_id ? "Elegí primero una evaluación"
+              : cargandoCtrl ? "Cargando controles…" : "— Sin control específico —"}
+          </option>
+          {controles.map(c => (
+            <option key={c.id} value={c.id}>
+              {c.id}{c.nombre ? ` — ${c.nombre}` : ""}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="field">
@@ -228,9 +278,11 @@ function RiesgosScreen({ evalId, onBack }) {
     () => evalId ? API.riesgos(evalId) : Promise.resolve([]), [evalId]
   );
   const { data: _partData } = useApi(() => API.participantes(), []);
+  const { data: _evalData } = useApi(() => API.evaluaciones(), []);
 
   const riesgos      = Array.isArray(_riesgosData) ? _riesgosData : [];
   const participantes = Array.isArray(_partData)   ? _partData   : [];
+  const evaluaciones  = Array.isArray(_evalData)   ? _evalData   : [];
 
   const open  = (r = null) => { setEditing(r); setModal(true); };
   const close = (saved)    => { setModal(false); if (saved) reload(); };
@@ -371,7 +423,7 @@ function RiesgosScreen({ evalId, onBack }) {
       )}
 
       <RiesgoModal open={modal} onClose={close} evalId={evalId}
-        editing={editing} participantes={participantes}/>
+        editing={editing} participantes={participantes} evaluaciones={evaluaciones}/>
     </div>
   );
 }

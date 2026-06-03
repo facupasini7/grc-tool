@@ -322,6 +322,17 @@ def _migrate():
             actualizado_en TEXT DEFAULT (datetime('now')),
             PRIMARY KEY (proveedor_id, pregunta_id)
         );
+
+        -- Hilo de comentarios/actividad por proveedor (incluye análisis de IA).
+        CREATE TABLE IF NOT EXISTS proveedor_comentarios (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            proveedor_id    INTEGER NOT NULL REFERENCES proveedores(id) ON DELETE CASCADE,
+            usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            usuario_nombre  TEXT NOT NULL DEFAULT 'Usuario',
+            usuario_rol     TEXT DEFAULT '',     -- rol del autor; 'ia' para análisis del asistente
+            texto           TEXT NOT NULL,
+            creado_en       TEXT DEFAULT (datetime('now'))
+        );
     """
     with get_conn() as conn:
         for sql in migrations:
