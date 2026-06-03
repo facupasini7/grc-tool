@@ -15,7 +15,6 @@ function App() {
   const [evalId,     setEvalId]     = useState(null);
   const [evalNombre, setEvalNombre] = useState("");
   const [newEvalOpen,setNewEvalOpen]= useState(false);
-  const [tweaksOpen, setTweaksOpen] = useState(false);
 
   /* 401 global handler */
   useEffect(() => {
@@ -74,7 +73,6 @@ function App() {
       { id:"riesgos",     label:"Riesgos",        icon:"AlertOctagon"  },
       { id:"remediacion", label:"Remediación",    icon:"Kanban"        },
       { id:"resultados",  label:"Resultados",     icon:"PieChart"      },
-      { id:"cobertura",   label:"Cobertura",      icon:"Layers"        },
       { id:"tprm",        label:"Terceros",       icon:"Building"      },
     ] : []),
     ...(isAdmin ? [
@@ -197,7 +195,6 @@ function App() {
           user={user}
           onSettings={() => go("settings")}
           onLogout={handleLogout}
-          onTweaks={typeof TweaksPanel !== "undefined" ? () => setTweaksOpen(true) : null}
         />
         {renderScreen()}
       </div>
@@ -210,9 +207,6 @@ function App() {
         />
       )}
 
-      {typeof TweaksPanel !== "undefined" && tweaksOpen && (
-        <TweaksPanel open={tweaksOpen} onClose={() => setTweaksOpen(false)}/>
-      )}
     </div>
   );
 }

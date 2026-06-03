@@ -207,11 +207,6 @@ function Topbar({ user, onSettings, onLogout, onTweaks }) {
       <button className="tb-iconbtn" title={dark ? "Modo claro" : "Modo oscuro"} onClick={toggleTheme}>
         {dark ? <Icon.Sun size={15}/> : <Icon.Moon size={15}/>}
       </button>
-      {onTweaks && (
-        <button className="tb-iconbtn" title="Panel de tweaks" onClick={onTweaks}>
-          <Icon.Sliders size={15}/>
-        </button>
-      )}
       {onLogout && (
         <button className="tb-iconbtn" title="Cerrar sesión" onClick={onLogout}>
           <Icon.LogOut size={15}/>

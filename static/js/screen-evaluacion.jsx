@@ -101,7 +101,6 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
           </>}
           <button className="btn btn-secondary" onClick={() => onNav("resultados")}><Icon.PieChart size={13}/> Resultados</button>
           <button className="btn btn-secondary" onClick={() => onNav("hallazgos")}><Icon.AlertTriangle size={13}/> Hallazgos</button>
-          <button className="btn btn-secondary" onClick={() => onNav("cobertura")}><Icon.Layers size={13}/> Cobertura</button>
           {(!user || user.rol !== "auditado") && (
             <button className="btn btn-primary btn-sm" onClick={() => setInformeOpen(true)}>
               <Icon.Download size={13}/> Exportar
