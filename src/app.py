@@ -1321,9 +1321,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True})
             return
 
-        # ── Asignar usuario a evaluación (admin) ──
+        # ── Asignar usuario a evaluación (staff) ──
         if path.startswith("/api/evaluaciones/") and path.endswith("/asignados"):
-            if not self._require_admin(user): return
+            if not self._require_write(user): return
             eid = int(path.split("/")[3])
             uid = body.get("usuario_id")
             if not uid:
@@ -2521,7 +2521,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif "/asignados/" in path:
             # DELETE /api/evaluaciones/:eid/asignados/:uid
-            if not self._require_admin(user): return
+            if not self._require_write(user): return
             parts = path.split("/")
             eid = int(parts[3])
             uid = int(parts[5])

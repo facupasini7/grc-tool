@@ -133,6 +133,8 @@ window.API = (() => {
     participantes()                     { return get("/api/participantes"); },
     asignados(evalId)                   { return get(`/api/evaluaciones/${evalId}/asignados`); },
     asignarParticipantes(evalId, ids)   { return post(`/api/evaluaciones/${evalId}/asignados`, { usuario_ids: ids }); },
+    asignarUsuarioEval(evalId, uid)     { return post(`/api/evaluaciones/${evalId}/asignados`, { usuario_id: uid }); },
+    desasignarUsuarioEval(evalId, uid)  { return del(`/api/evaluaciones/${evalId}/asignados/${uid}`); },
 
     /* Admin — config + reminders */
     configSistema()       { return get("/api/admin/config"); },

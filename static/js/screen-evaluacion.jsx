@@ -22,6 +22,7 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
   const [saving,        setSaving]        = useStateE({});
   const [newHallazgo,   setNewHallazgo]   = useStateE(null); // ctrl for new finding modal
   const [informeOpen,   setInformeOpen]   = useStateE(false);
+  const [asignarOpen,   setAsignarOpen]   = useStateE(false);
 
   // Build domain / control structure from API
   const controles = ctrlData?.controles || ctrlData || [];
@@ -98,6 +99,7 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
             <button className="btn btn-ghost btn-sm" onClick={() => onNav("riesgos")}><Icon.AlertOctagon size={13}/> Riesgos</button>
             <button className="btn btn-ghost btn-sm" onClick={() => onNav("soa")}><Icon.ClipboardCheck size={13}/> SoA</button>
             <button className="btn btn-ghost btn-sm" onClick={() => onNav("deadlines")}><Icon.Calendar size={13}/> Deadlines</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAsignarOpen(true)}><Icon.Users size={13}/> Asignar usuarios</button>
           </>}
           <button className="btn btn-secondary" onClick={() => onNav("resultados")}><Icon.PieChart size={13}/> Resultados</button>
           <button className="btn btn-secondary" onClick={() => onNav("hallazgos")}><Icon.AlertTriangle size={13}/> Hallazgos</button>
@@ -167,7 +169,92 @@ function EvaluacionScreen({ evalId, onBack, onNav, user }) {
           onClose={() => setInformeOpen(false)}
         />
       )}
+
+      {asignarOpen && (
+        <AsignarUsuariosModal evalId={evalId} onClose={() => setAsignarOpen(false)}/>
+      )}
     </div>
+  );
+}
+
+/* ── Modal: asociar usuarios (auditados) a la evaluación ─────────── */
+function AsignarUsuariosModal({ evalId, onClose }) {
+  const [usuarios, setUsuarios]   = useStateE([]);
+  const [sel,      setSel]        = useStateE(new Set());
+  const [loading,  setLoading]    = useStateE(true);
+  const [saving,   setSaving]     = useStateE(false);
+
+  useEffectE(() => {
+    let alive = true;
+    Promise.all([API.participantes().catch(() => []), API.asignados(evalId).catch(() => [])])
+      .then(([todos, asignados]) => {
+        if (!alive) return;
+        setUsuarios(Array.isArray(todos) ? todos : []);
+        setSel(new Set((Array.isArray(asignados) ? asignados : []).map(u => u.id)));
+        setLoading(false);
+      });
+    return () => { alive = false; };
+  }, [evalId]);
+
+  const toggle = (id) => setSel(s => {
+    const n = new Set(s);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+
+  const guardar = async () => {
+    setSaving(true);
+    try {
+      const prev = new Set((await API.asignados(evalId).catch(() => [])).map(u => u.id));
+      const ahora = sel;
+      const aAgregar = [...ahora].filter(id => !prev.has(id));
+      const aQuitar  = [...prev].filter(id => !ahora.has(id));
+      for (const id of aAgregar) await API.asignarUsuarioEval(evalId, id);
+      for (const id of aQuitar)  await API.desasignarUsuarioEval(evalId, id);
+      onClose();
+    } catch { alert("Error al guardar las asignaciones."); }
+    finally { setSaving(false); }
+  };
+
+  // Resaltar auditados (son los que típicamente se asignan a una evaluación)
+  const orden = (u) => (u.rol === "auditado" ? 0 : 1);
+  const lista = [...usuarios].sort((a, b) => orden(a) - orden(b));
+
+  return (
+    <Modal open={true} onClose={onClose}
+      title="Asignar usuarios a la evaluación"
+      sub="Asociá los usuarios (auditados) que podrán acceder y responder esta evaluación"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-primary" onClick={guardar} disabled={saving || loading}>
+          {saving ? <Icon.Loader size={13}/> : <Icon.Check size={13}/>} Guardar
+        </button>
+      </>}>
+      {loading ? <Spinner/> : usuarios.length === 0 ? (
+        <div style={{ fontSize:13, color:"var(--text-muted)" }}>No hay usuarios disponibles.</div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:380, overflowY:"auto" }}>
+          {lista.map(u => {
+            const checked = sel.has(u.id);
+            return (
+              <label key={u.id} style={{
+                display:"flex", alignItems:"center", gap:10, padding:"9px 11px", borderRadius:8,
+                cursor:"pointer", background: checked ? "var(--accent-bg)" : "var(--surface-2)",
+                border:`1px solid ${checked ? "var(--accent)" : "var(--border)"}`,
+              }}>
+                <input type="checkbox" checked={checked} onChange={() => toggle(u.id)}
+                       style={{ accentColor:"var(--accent)" }}/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600 }}>{u.nombre || u.username}</div>
+                  <div style={{ fontSize:11.5, color:"var(--text-muted)" }} className="mono">@{u.username}</div>
+                </div>
+                <Badge tone={u.rol === "auditado" ? "warning" : "neutral"}>{ROLE_SHORT[u.rol] || u.rol}</Badge>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
   );
 }
 
