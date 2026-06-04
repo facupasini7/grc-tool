@@ -281,6 +281,7 @@ function HallazgoEvidencias({ hallazgoId }) {
                     {" · "}{fmtDateTimeHa(ev.subida_en)}
                   </div>
                 </div>
+                <a className="btn btn-sm btn-ghost" href={API.hallazgoEvidenciaDownloadUrl(ev.id)} title="Descargar"><Icon.Download size={12}/></a>
                 <button className="btn btn-sm btn-ghost" onClick={() => eliminar(ev.id)} title="Eliminar"><Icon.Trash size={12}/></button>
               </div>
             );

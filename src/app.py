@@ -340,6 +340,28 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def _send_download(self, filepath, filename, filetype=""):
+        """Sirve un archivo de evidencia como descarga (attachment)."""
+        try:
+            data = Path(filepath).read_bytes()
+        except Exception:
+            self.send_json({"error": "Archivo no encontrado en el servidor."}, 404)
+            return
+        ctype = {
+            ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+            ".txt": "text/plain", ".csv": "text/csv", ".json": "application/json",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }.get((filetype or Path(filename).suffix).lower(), "application/octet-stream")
+        safe = re.sub(r'[^\w.\- ]', '_', filename or "evidencia")
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Disposition", f'attachment; filename="{safe}"')
+        self.send_header("Content-Length", len(data))
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -631,6 +653,48 @@ class Handler(BaseHTTPRequestHandler):
         # ── Requiere autenticación ──
         user = self._require_auth()
         if not user:
+            return
+
+        # ── Descarga de evidencias (controles / hallazgos / terceros) ──
+        if path.startswith("/api/evidencias/") and path.endswith("/download"):
+            if not self._require_perm(user, "evidencias.ver"): return
+            ev_id = int(path.split("/")[3])
+            with get_conn() as conn:
+                ev = conn.execute(
+                    "SELECT filename, filepath, filetype FROM evidencias WHERE id=?", (ev_id,)
+                ).fetchone()
+            if not ev:
+                self.send_json({"error": "Evidencia no encontrada."}, 404); return
+            self._send_download(ev["filepath"], ev["filename"], ev["filetype"])
+            return
+
+        if path.startswith("/api/hallazgo-evidencias/") and path.endswith("/download"):
+            ev_id = int(path.split("/")[3])
+            with get_conn() as conn:
+                ev = conn.execute(
+                    "SELECT filename, filepath, filetype, usuario_id FROM hallazgo_evidencias WHERE id=?", (ev_id,)
+                ).fetchone()
+            if not ev:
+                self.send_json({"error": "Evidencia no encontrada."}, 404); return
+            # Staff y quien la subió pueden descargarla; el auditado sólo ve sus propios hallazgos.
+            permitido = (user.get("rol") in ("admin", "analista", "auditor_externo", "auditado")
+                         or "hallazgos.ver" in (user.get("permisos") or [])
+                         or ev["usuario_id"] == user.get("id"))
+            if not permitido:
+                self.send_json({"error": "Sin permiso para descargar esta evidencia."}, 403); return
+            self._send_download(ev["filepath"], ev["filename"], ev["filetype"])
+            return
+
+        if path.startswith("/api/tprm-evidencias/") and path.endswith("/download"):
+            if not self._require_perm(user, "tprm.ver"): return
+            ev_id = int(path.split("/")[3])
+            with get_conn() as conn:
+                ev = conn.execute(
+                    "SELECT filename, filepath, filetype FROM tprm_respuesta_evidencias WHERE id=?", (ev_id,)
+                ).fetchone()
+            if not ev:
+                self.send_json({"error": "Evidencia no encontrada."}, 404); return
+            self._send_download(ev["filepath"], ev["filename"], ev["filetype"])
             return
 
         if path == "/api/me":

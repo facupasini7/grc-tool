@@ -94,6 +94,10 @@ window.API = (() => {
 
     /* Evidencias */
     evidencias(evalId, ctrlId)        { return get(`/api/evaluaciones/${evalId}/evidencias${ctrlId ? "?control_id=" + ctrlId : ""}`); },
+    /* URLs de descarga de evidencia (link directo, usa la cookie de sesión) */
+    evidenciaDownloadUrl(id)          { return `/api/evidencias/${id}/download`; },
+    hallazgoEvidenciaDownloadUrl(id)  { return `/api/hallazgo-evidencias/${id}/download`; },
+    tprmEvidenciaDownloadUrl(id)      { return `/api/tprm-evidencias/${id}/download`; },
     subirEvidencia(evalId, ctrlId, d) { return post(`/api/evaluaciones/${evalId}/evidencias`, { ...d, control_id: ctrlId }); },
     eliminarEvidencia(evalId, evId)   { return del(`/api/evaluaciones/${evalId}/evidencias/${evId}`); },
     /* IA — confirmar / rechazar sugerencia */

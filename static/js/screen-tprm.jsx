@@ -431,6 +431,9 @@ function ProveedorModal({ proveedorId, preguntas, canManage, canAnswer, onClose,
                                   <Icon.Paperclip size={12} style={{ color:"var(--text-muted)", flexShrink:0 }}/>
                                   <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ev.filename}</span>
                                   <span style={{ fontSize:10.5, color:"var(--text-faint)" }}>{ev.usuario_nombre} · {fmtDateTimeTp(ev.subida_en)}</span>
+                                  <a className="btn btn-ghost btn-icon" href={API.tprmEvidenciaDownloadUrl(ev.id)} title="Descargar">
+                                    <Icon.Download size={12}/>
+                                  </a>
                                   {canAnswer && (
                                     <button className="btn btn-ghost btn-icon" style={{ color:"var(--danger)" }}
                                             title="Eliminar" onClick={() => eliminarEvidencia(ev.id)}>

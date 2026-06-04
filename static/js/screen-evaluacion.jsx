@@ -557,6 +557,10 @@ function EvidenciasInline({ evalId, ctrlId }) {
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <Icon.FileText size={13} style={{ color:"var(--text-muted)", flexShrink:0 }}/>
                     <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ev.filename}</span>
+                    <a className="btn btn-ghost btn-icon" href={API.evidenciaDownloadUrl(ev.id)}
+                       title="Descargar" onClick={e => e.stopPropagation()}>
+                      <Icon.Download size={12}/>
+                    </a>
                     <Badge tone={vTone}>{ev.veredicto || "pendiente"}</Badge>
                   </div>
                   {analisis?.resumen && (
