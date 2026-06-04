@@ -106,8 +106,8 @@ python-docx>=1.1   # extracción de texto de evidencias en DOCX
 ### 1. Cloná el repositorio
 
 ```bash
-git clone https://github.com/facupasini7/grc-tool.git
-cd grc-tool
+git clone https://github.com/facupasini7/NormaLab.git
+cd NormaLab
 ```
 
 ### 2. Creá un entorno virtual (recomendado)
@@ -250,8 +250,8 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/grc-tool
-ExecStart=/opt/grc-tool/venv/bin/python run.py
+WorkingDirectory=/opt/normalab
+ExecStart=/opt/normalab/venv/bin/python run.py
 Restart=on-failure
 Environment=GRC_HOST=0.0.0.0
 Environment=GRC_PORT=8090
@@ -275,7 +275,7 @@ Agregá `run.py` al Programador de tareas o creá un archivo `.bat`:
 
 ```bat
 @echo off
-cd C:\grc-tool
+cd C:\NormaLab
 venv\Scripts\python.exe run.py
 ```
 
