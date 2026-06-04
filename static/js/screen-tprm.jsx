@@ -42,6 +42,12 @@ const fmtDateTimeTp = (s) => {
   if (isNaN(d)) return s;
   return d.toLocaleString("es-AR", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
 };
+const fileToB64Tp = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload  = () => resolve(String(reader.result).split(",")[1]);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
 
 /* Anillo de puntaje */
 function ScoreRing({ puntaje, nivel, size = 64 }) {
@@ -71,7 +77,8 @@ function ScoreRing({ puntaje, nivel, size = 64 }) {
 }
 
 /* ── Modal de detalle / edición de proveedor ─────────────────────── */
-function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged }) {
+function ProveedorModal({ proveedorId, preguntas, canManage, canAnswer, onClose, onChanged }) {
+  if (canAnswer === undefined) canAnswer = canManage;
   const isNew = !proveedorId;
   const [tab, setTab] = useStateTprm("perfil");
   const [prov, setProv] = useStateTprm(null);
@@ -89,6 +96,14 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
     if (isNew) return;
     API.proveedorComentarios(proveedorId)
       .then(cs => setComentarios(Array.isArray(cs) ? cs : []))
+      .catch(() => {});
+  };
+
+  const [evidencias, setEvidencias] = useStateTprm([]);
+  const cargarEvidencias = () => {
+    if (isNew) return;
+    API.tprmEvidencias(proveedorId)
+      .then(es => setEvidencias(Array.isArray(es) ? es : []))
       .catch(() => {});
   };
 
@@ -118,6 +133,9 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
     }).catch(() => { if (alive) { setError("No se pudo cargar el proveedor"); setLoading(false); } });
     API.proveedorComentarios(proveedorId)
       .then(cs => { if (alive) setComentarios(Array.isArray(cs) ? cs : []); })
+      .catch(() => {});
+    API.tprmEvidencias(proveedorId)
+      .then(es => { if (alive) setEvidencias(Array.isArray(es) ? es : []); })
       .catch(() => {});
     return () => { alive = false; };
   }, [proveedorId]);
@@ -191,6 +209,23 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
     } finally {
       setComEnviando(false);
     }
+  };
+
+  const subirEvidencia = async (pregId, file) => {
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { setError("El archivo supera el límite de 20 MB."); return; }
+    try {
+      const data = await fileToB64Tp(file);
+      await API.subirTprmEvidencia(proveedorId, pregId, { filename: file.name, data });
+      cargarEvidencias();
+    } catch (e) {
+      setError("No se pudo subir la evidencia. Verificá el formato y tamaño.");
+    }
+  };
+
+  const eliminarEvidencia = async (evId) => {
+    try { await API.eliminarTprmEvidencia(evId); cargarEvidencias(); }
+    catch { setError("No se pudo eliminar la evidencia."); }
   };
 
   /* Agrupar preguntas por categoría */
@@ -304,7 +339,7 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
                   comentarios={comentarios}
                   texto={comTexto} setTexto={setComTexto}
                   enviando={comEnviando} onEnviar={enviarComentario}
-                  canManage={canManage}
+                  canManage={canAnswer}
                 />
               )}
 
@@ -359,6 +394,7 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
                     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                       {items.map(q => {
                         const cur = respuestas[q.id]?.respuesta || "na";
+                        const evsQ = evidencias.filter(e => e.pregunta_id === q.id);
                         return (
                           <div key={q.id} style={{ background:"var(--surface-1)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 12px" }}>
                             <div style={{ fontSize:13, color:"var(--text-primary)", marginBottom:8 }}>{q.texto}</div>
@@ -366,11 +402,11 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
                               {TPRM_RESPUESTAS.map(opt => {
                                 const sel = cur === opt.v;
                                 return (
-                                  <button key={opt.v} type="button" disabled={!canManage}
+                                  <button key={opt.v} type="button" disabled={!canAnswer}
                                           onClick={() => setResp(q.id, "respuesta", opt.v)}
                                           style={{
                                             padding:"4px 10px", borderRadius:6, fontSize:12, fontWeight:600,
-                                            cursor: canManage ? "pointer" : "default",
+                                            cursor: canAnswer ? "pointer" : "default",
                                             background: sel ? opt.color+"22" : "var(--surface-2)",
                                             color: sel ? opt.color : "var(--text-secondary)",
                                             border:`1px solid ${sel ? opt.color : "var(--border)"}`,
@@ -380,12 +416,39 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
                                 );
                               })}
                             </div>
-                            {canManage && (
+                            {canAnswer && (
                               <input className="input" placeholder="Comentario (opcional)…"
                                      value={respuestas[q.id]?.comentario || ""}
                                      onChange={e => setResp(q.id, "comentario", e.target.value)}
                                      style={{ marginTop:8, fontSize:12.5 }}/>
                             )}
+
+                            {/* Evidencias de la pregunta */}
+                            <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:5 }}>
+                              {evsQ.map(ev => (
+                                <div key={ev.id} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12,
+                                     background:"var(--surface-2)", border:"1px solid var(--border)", borderRadius:6, padding:"5px 9px" }}>
+                                  <Icon.Paperclip size={12} style={{ color:"var(--text-muted)", flexShrink:0 }}/>
+                                  <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ev.filename}</span>
+                                  <span style={{ fontSize:10.5, color:"var(--text-faint)" }}>{ev.usuario_nombre} · {fmtDateTimeTp(ev.subida_en)}</span>
+                                  {canAnswer && (
+                                    <button className="btn btn-ghost btn-icon" style={{ color:"var(--danger)" }}
+                                            title="Eliminar" onClick={() => eliminarEvidencia(ev.id)}>
+                                      <Icon.Trash size={12}/>
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              {canAnswer && (
+                                <label style={{ display:"inline-flex", alignItems:"center", gap:6, alignSelf:"flex-start",
+                                       padding:"5px 9px", border:"1.5px dashed var(--border)", borderRadius:6,
+                                       fontSize:12, color:"var(--text-muted)", cursor:"pointer" }}>
+                                  <Icon.Upload size={12}/> Adjuntar evidencia
+                                  <input type="file" style={{ display:"none" }}
+                                         onChange={e => { subirEvidencia(q.id, e.target.files[0]); e.target.value=""; }}/>
+                                </label>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -396,7 +459,7 @@ function ProveedorModal({ proveedorId, preguntas, canManage, onClose, onChanged 
 
               {error && <div style={{ marginTop:12, padding:"8px 12px", borderRadius:8, background:"var(--danger-bg)", color:"var(--danger)", fontSize:13 }}>{error}</div>}
 
-              {canManage && (
+              {canAnswer && (
                 <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:16 }}>
                   <button className="btn btn-primary" onClick={guardarCuestionario} disabled={saving}>
                     {saving ? <Spinner size={14}/> : <Icon.Check size={14}/>}
@@ -526,6 +589,8 @@ function TPRMScreen({ user }) {
   const [search, setSearch] = useStateTprm("");
 
   const canManage = user?.rol === "admin" || (user?.permisos || []).includes("tprm.gestionar");
+  // El proveedor (tprm.responder) puede responder/adjuntar/comentar, pero no gestionar el alta.
+  const canAnswer = canManage || (user?.permisos || []).includes("tprm.responder");
 
   const lista = (provs || []).filter(p => !search || p.nombre.toLowerCase().includes(search.toLowerCase()));
 
@@ -596,6 +661,7 @@ function TPRMScreen({ user }) {
           proveedorId={modalId}
           preguntas={preguntas || []}
           canManage={canManage}
+          canAnswer={canAnswer}
           onClose={() => setModalId(undefined)}
           onChanged={reload}
         />

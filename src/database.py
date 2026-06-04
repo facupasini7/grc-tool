@@ -323,6 +323,19 @@ def _migrate():
             PRIMARY KEY (proveedor_id, pregunta_id)
         );
 
+        -- Evidencias adjuntas por pregunta del cuestionario de un proveedor.
+        CREATE TABLE IF NOT EXISTS tprm_respuesta_evidencias (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            proveedor_id    INTEGER NOT NULL REFERENCES proveedores(id) ON DELETE CASCADE,
+            pregunta_id     INTEGER NOT NULL REFERENCES tprm_preguntas(id) ON DELETE CASCADE,
+            usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            usuario_nombre  TEXT NOT NULL DEFAULT 'Usuario',
+            filename        TEXT NOT NULL,
+            filepath        TEXT NOT NULL,
+            filetype        TEXT DEFAULT '',
+            subida_en       TEXT DEFAULT (datetime('now'))
+        );
+
         -- Hilo de comentarios/actividad por proveedor (incluye análisis de IA).
         CREATE TABLE IF NOT EXISTS proveedor_comentarios (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,

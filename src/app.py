@@ -395,6 +395,16 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return True
 
+    def _require_tprm_write(self, user):
+        """Responder/comentar/adjuntar en TPRM: admin, gestor de terceros o proveedor."""
+        if user.get("rol") == "admin":
+            return True
+        perms = user.get("permisos") or []
+        if "tprm.gestionar" in perms or "tprm.responder" in perms:
+            return True
+        self.send_json({"error": "Sin permiso para responder el cuestionario de terceros."}, 403)
+        return False
+
     def _require_write(self, user):
         """admin y analista pueden escribir; auditor_externo solo lectura."""
         if user.get("rol") in ("admin", "analista"):
@@ -1217,6 +1227,18 @@ class Handler(BaseHTTPRequestHandler):
                 rows = conn.execute(
                     "SELECT id, categoria, texto, peso, orden FROM tprm_preguntas "
                     "WHERE activa=1 ORDER BY orden, id"
+                ).fetchall()
+            self.send_json([dict(r) for r in rows])
+
+        # ── TPRM: evidencias del cuestionario de un proveedor (todas) ──
+        elif path.startswith("/api/proveedores/") and path.endswith("/evidencias"):
+            if not self._require_perm(user, "tprm.ver"): return
+            pid = int(path.split("/")[3])
+            with get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT id, pregunta_id, usuario_nombre, filename, filetype, subida_en
+                       FROM tprm_respuesta_evidencias WHERE proveedor_id=? ORDER BY subida_en ASC""",
+                    (pid,),
                 ).fetchall()
             self.send_json([dict(r) for r in rows])
 
@@ -2173,9 +2195,48 @@ class Handler(BaseHTTPRequestHandler):
                        f"{fw_id}:{ctrl_id}", nombre, self._ip())
             self.send_json({"ok": True, "id": ctrl_id})
 
+        # ── TPRM: subir evidencia a una pregunta del cuestionario ──
+        elif (path.startswith("/api/proveedores/") and "/preguntas/" in path
+              and path.endswith("/evidencias")):
+            if not self._require_tprm_write(user): return
+            parts = path.split("/")   # ['', 'api', 'proveedores', pid, 'preguntas', preg, 'evidencias']
+            pid  = int(parts[3]); preg_id = int(parts[5])
+            filename = body.get("filename", "archivo")
+            data_b64 = body.get("data", "")
+            safe_filename = re.sub(r'[^\w.\-]', '_', Path(filename).name)
+            ext = Path(safe_filename).suffix.lower()
+            if ext not in EXTENSIONES_VALIDAS:
+                self.send_json({"error": f"Extensión no soportada: {ext}"}, 400); return
+            try:
+                file_bytes = base64.b64decode(data_b64)
+            except Exception as e:
+                self.send_json({"error": f"Datos de archivo inválidos: {e}"}, 400); return
+            if len(file_bytes) > MAX_UPLOAD_BYTES:
+                self.send_json({"error": "El archivo supera el límite de 20 MB."}, 400); return
+            safe_name = f"{uuid.uuid4().hex}{ext}"
+            filepath  = UPLOADS_DIR / safe_name
+            try:
+                filepath.write_bytes(file_bytes)
+            except Exception as e:
+                self.send_json({"error": f"No se pudo guardar: {e}"}, 500); return
+            with get_conn() as conn:
+                if not conn.execute("SELECT 1 FROM proveedores WHERE id=?", (pid,)).fetchone():
+                    self.send_json({"error": "Proveedor no encontrado"}, 404); return
+                cur = conn.execute(
+                    """INSERT INTO tprm_respuesta_evidencias
+                       (proveedor_id, pregunta_id, usuario_id, usuario_nombre, filename, filepath, filetype)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (pid, preg_id, user.get("id"),
+                     user.get("nombre") or user.get("username", "Usuario"),
+                     safe_filename, str(filepath), ext),
+                )
+                ev_id = cur.lastrowid
+            log_action(user["id"], user["username"], "tprm_subir_evidencia", "proveedor", pid, ip=self._ip())
+            self.send_json({"ok": True, "id": ev_id})
+
         # ── TPRM: guardar respuestas del cuestionario de un proveedor ──
         elif path.startswith("/api/proveedores/") and path.endswith("/respuestas"):
-            if not self._require_perm(user, "tprm.gestionar"): return
+            if not self._require_tprm_write(user): return
             pid = int(path.split("/")[3])
             respuestas = body.get("respuestas", [])  # [{pregunta_id, respuesta, comentario}]
             VALIDAS = {"cumple", "parcial", "no_cumple", "na"}
@@ -2237,7 +2298,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── TPRM: agregar comentario manual al hilo de un proveedor ──
         elif path.startswith("/api/proveedores/") and path.endswith("/comentarios"):
-            if not self._require_perm(user, "tprm.gestionar"): return
+            if not self._require_tprm_write(user): return
             pid = int(path.split("/")[3])
             texto = (body.get("texto") or "").strip()
             if not texto:
@@ -2530,6 +2591,27 @@ class Handler(BaseHTTPRequestHandler):
                     "DELETE FROM evaluacion_usuarios WHERE evaluacion_id=? AND usuario_id=?",
                     (eid, uid),
                 )
+            self.send_json({"ok": True})
+
+        # ── Eliminar evidencia de pregunta TPRM (staff o quien la subió) ──
+        elif "/tprm-evidencias/" in path:
+            ev_id = int(path.split("/")[-1])
+            with get_conn() as conn:
+                ev = conn.execute(
+                    "SELECT filepath, usuario_id FROM tprm_respuesta_evidencias WHERE id=?", (ev_id,)
+                ).fetchone()
+                if not ev:
+                    self.send_json({"error": "Evidencia no encontrada."}, 404); return
+                es_staff = user.get("rol") == "admin" or "tprm.gestionar" in (user.get("permisos") or [])
+                if not es_staff and ev["usuario_id"] != user.get("id"):
+                    self.send_json({"error": "No podés eliminar esta evidencia."}, 403); return
+                try:
+                    Path(ev["filepath"]).unlink(missing_ok=True)
+                except Exception:
+                    pass
+                conn.execute("DELETE FROM tprm_respuesta_evidencias WHERE id=?", (ev_id,))
+            log_action(user["id"], user["username"], "tprm_eliminar_evidencia",
+                       "tprm_evidencia", ev_id, ip=self._ip())
             self.send_json({"ok": True})
 
         # ── Eliminar usuario (admin o SegInf IDM) ──

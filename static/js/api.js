@@ -73,6 +73,9 @@ window.API = (() => {
     sugerirRiesgoProveedor(id)     { return post(`/api/proveedores/${id}/sugerir-riesgo`, {}); },
     proveedorComentarios(id)       { return get(`/api/proveedores/${id}/comentarios`); },
     agregarProveedorComentario(id, texto) { return post(`/api/proveedores/${id}/comentarios`, { texto }); },
+    tprmEvidencias(id)             { return get(`/api/proveedores/${id}/evidencias`); },
+    subirTprmEvidencia(id, pregId, d) { return post(`/api/proveedores/${id}/preguntas/${pregId}/evidencias`, d); },
+    eliminarTprmEvidencia(evId)    { return del(`/api/tprm-evidencias/${evId}`); },
 
     /* Riesgos */
     riesgos(evalId)         { return get(`/api/evaluaciones/${evalId}/riesgos`); },
