@@ -195,6 +195,10 @@ function SoAScreen({ evalId, evalNombre, onBack }) {
             onClick={() => exportSoA(controles, respMap, evalNombre || `eval-${evalId}`)}>
             <Icon.Download size={13}/> Exportar CSV
           </button>
+          <button className="btn btn-primary btn-sm"
+            onClick={() => { const a = document.createElement("a"); a.href = API.soaPdfUrl(evalId); a.target = "_blank"; a.rel = "noopener"; a.click(); }}>
+            <Icon.FileText size={13}/> Exportar PDF
+          </button>
         </div>
       </div>
 

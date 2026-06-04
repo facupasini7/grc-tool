@@ -969,6 +969,41 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
 
+        # ── Declaración de Aplicabilidad (SoA) en PDF ──
+        elif path.startswith("/api/evaluaciones/") and path.endswith("/soa-pdf"):
+            if not self._require_perm(user, "reportes.generar"): return
+            eid = int(path.split("/")[3])
+            with get_conn() as conn:
+                ev = conn.execute("SELECT * FROM evaluaciones WHERE id=?", (eid,)).fetchone()
+                if not ev:
+                    self.send_json({"error": "no encontrada"}, 404); return
+                resp_rows = conn.execute(
+                    "SELECT * FROM respuestas WHERE evaluacion_id=?", (eid,)
+                ).fetchall()
+            fw_id = qs.get("framework", [None])[0] or get_primary_framework(ev)
+            fw    = FRAMEWORK_REGISTRY.get(fw_id, FRAMEWORK_REGISTRY["ISO27001"])
+            dominios_map = fw["dominios"]
+            controles = get_controles_db(fw_id)
+            resp_map  = {r["control_id"]: dict(r) for r in resp_rows}
+            for c in controles:
+                r = resp_map.get(c["id"], {})
+                c["aplica"]                  = r.get("aplica", 1)
+                c["madurez"]                 = r.get("madurez", 0)
+                c["excepcion_justificacion"] = r.get("excepcion_justificacion", "")
+                c["excepcion_aprobada"]      = r.get("excepcion_aprobada", 0)
+                c["excepcion_hasta"]         = r.get("excepcion_hasta", "")
+                c["dominio_nombre"]          = dominios_map.get(c.get("dominio", ""), c.get("dominio", ""))
+            from report import generar_soa_pdf
+            pdf_path = generar_soa_pdf(dict(ev), controles, fw_id)
+            data     = pdf_path.read_bytes()
+            fname    = f"SoA-{fw_id}-{eid}.pdf"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Disposition", f'attachment; filename="{fname}"')
+            self.send_header("Content-Length", len(data))
+            self.end_headers()
+            self.wfile.write(data)
+
         # ── Riesgos ──
         elif path.startswith("/api/evaluaciones/") and "/riesgos" in path and path.count("/") == 4:
             if self._block_auditado(user): return

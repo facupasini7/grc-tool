@@ -532,6 +532,101 @@ def generar_informe(evaluacion: dict, stats: dict, controles: list,
         return out
 
 
+# ── Declaración de Aplicabilidad (SoA) ──────────────────────────────────────
+
+def generar_soa_pdf(evaluacion: dict, controles: list, fw_id: str) -> Path:
+    """Genera el PDF de la Declaración de Aplicabilidad (SoA).
+
+    `controles` debe venir enriquecido con: id, nombre, dominio_nombre/dominio,
+    aplica, excepcion_justificacion, excepcion_aprobada, excepcion_hasta, madurez.
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, PageBreak,
+    )
+
+    out = REPORTS_DIR / f"soa_{evaluacion['id']}_{fw_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    doc = SimpleDocTemplate(str(out), pagesize=A4,
+                            leftMargin=1.6*cm, rightMargin=1.6*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+    st  = _build_styles()
+    story = []
+
+    # Portada
+    from reportlab.platypus import Spacer as _Sp
+    story.append(_Sp(1, 3.5 * 28.35))
+    story.append(Paragraph(_fw_label(fw_id), st["portada_fw"]))
+    story.append(Paragraph("Declaración de Aplicabilidad (SoA)", st["portada_title"]))
+    story.append(Paragraph("ISO/IEC 27001 — cláusula 6.1.3 d)", st["portada_sub"]))
+    story.append(Spacer(1, 12))
+    story.append(HRFlowable(width="70%", thickness=2, color=st["C_BLUE"], spaceAfter=20))
+    story.append(Paragraph(f"<b>Empresa:</b> {evaluacion['empresa']}", st["portada_info"]))
+    story.append(Paragraph(f"<b>Evaluación:</b> {evaluacion['nombre']}", st["portada_info"]))
+    story.append(Paragraph(f"<b>Fecha de emisión:</b> {datetime.now().strftime('%d/%m/%Y')}", st["portada_info"]))
+    story.append(Spacer(1, 28))
+    story.append(Paragraph("Generado por NormaLab GRC — Confidencial", st["portada_info"]))
+    story.append(PageBreak())
+
+    # Resumen
+    total    = len(controles)
+    aplican  = sum(1 for c in controles if c.get("aplica", 1) != 0)
+    excluidos = total - aplican
+    sin_just = sum(1 for c in controles if c.get("aplica", 1) == 0 and not c.get("excepcion_justificacion"))
+
+    story.append(Paragraph("Declaración de Aplicabilidad", st["h1"]))
+    story.append(HRFlowable(width="100%", thickness=1, color=st["C_BLUE"], spaceAfter=8))
+    story.append(Paragraph(
+        f"Total de controles: <b>{total}</b> · Aplican: <b>{aplican}</b> · "
+        f"Excluidos: <b>{excluidos}</b> · Exclusiones sin justificar: <b>{sin_just}</b>.",
+        st["normal"]))
+    story.append(Spacer(1, 8))
+
+    # Tabla SoA
+    estilo_celda = st["small"]
+    header = ["ID", "Control", "Dominio", "Estado", "Justificación de exclusión", "Rev. hasta"]
+    data = [header]
+    for c in controles:
+        aplica   = c.get("aplica", 1) != 0
+        aprobada = bool(c.get("excepcion_aprobada"))
+        if aplica:
+            estado = "Aplica"
+        else:
+            estado = "Excluido" if aprobada else "No aplica"
+        just = (c.get("excepcion_justificacion") or "").strip()
+        if not aplica and not just:
+            just = "— Pendiente de justificación —"
+        data.append([
+            Paragraph(str(c.get("id", "")), estilo_celda),
+            Paragraph(str(c.get("nombre", "")), estilo_celda),
+            Paragraph(str(c.get("dominio_nombre") or c.get("dominio") or ""), estilo_celda),
+            Paragraph(estado, estilo_celda),
+            Paragraph(just if not aplica else "—", estilo_celda),
+            Paragraph(str(c.get("excepcion_hasta") or "—"), estilo_celda),
+        ])
+
+    t = Table(data, colWidths=[2.0*cm, 4.6*cm, 2.6*cm, 1.9*cm, 5.0*cm, 1.7*cm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0),  st["C_DARK"]),
+        ("TEXTCOLOR",     (0, 0), (-1, 0),  st["C_WHITE"]),
+        ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+        ("FONTSIZE",      (0, 0), (-1, 0),  8),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [st["C_LIGHT"], colors.white]),
+        ("GRID",          (0, 0), (-1, -1), 0.3, colors.HexColor("#cbd5e1")),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
+    ]))
+    story.append(t)
+    _pie(story, fw_id, st)
+
+    doc.build(story)
+    return out
+
+
 # Backward compat alias
 def generar_pdf(evaluacion, stats, controles):
     fw_id = "ISO27001"

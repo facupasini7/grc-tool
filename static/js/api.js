@@ -106,6 +106,12 @@ window.API = (() => {
     /* Cobertura */
     cobertura(evalId) { return get(`/api/evaluaciones/${evalId}/cobertura`); },
 
+    /* SoA — URL de descarga del PDF (para window.open / link directo) */
+    soaPdfUrl(evalId, framework) {
+      const q = framework ? `?framework=${encodeURIComponent(framework)}` : "";
+      return `/api/evaluaciones/${evalId}/soa-pdf${q}`;
+    },
+
     /* Remediación */
     remediacion(evalId)         { return get(`/api/evaluaciones/${evalId}/hallazgos`); },
     avanzarEstado(id, estado)   { return post(`/api/hallazgos/${id}/estado`, { estado }); },
