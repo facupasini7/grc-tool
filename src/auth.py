@@ -239,6 +239,8 @@ def _rol_nombre_sistema(rol_key: str) -> str:
         "analista": "Analista GRC",
         "auditor_externo": "Auditor Externo",
         "auditado": "Auditado",
+        "seginf_idm": "SegInf IDM",
+        "proveedor": "Proveedor",
     }
     return mapping.get(rol_key, rol_key)
 

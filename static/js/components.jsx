@@ -277,7 +277,7 @@ const stateLabel = (st) => ({
   // compatibilidad con estados antiguos
   abierto:"Abierto", en_proceso:"En proceso", resuelto:"Resuelto", verificado:"Verificado",
 }[st] || st);
-const roleLabel = (r)   => ({ admin:"Administrador", analista:"Analista GRC", auditado:"Auditado", auditor_externo:"Auditor Externo" }[r] || r);
+const roleLabel = (r)   => ({ admin:"Administrador", analista:"Analista GRC", auditado:"Auditado", auditor_externo:"Auditor Externo", seginf_idm:"SegInf IDM", proveedor:"Proveedor" }[r] || r);
 
 // ── Export ────────────────────────────────────────────────────────
 Object.assign(window, {

@@ -389,6 +389,7 @@ PERMISOS_CATALOGO = [
     # Terceros (TPRM)
     ("tprm.ver",            "Ver terceros",                  "Consultar proveedores y sus evaluaciones de riesgo",          "Terceros"),
     ("tprm.gestionar",      "Gestionar terceros",            "Crear/editar proveedores, responder cuestionarios y evaluar", "Terceros"),
+    ("tprm.responder",      "Responder cuestionario (proveedor)", "Contestar el cuestionario de seguridad, subir evidencias y comentar", "Terceros"),
     # Remediación
     ("remediacion.ver",     "Ver remediación",               "Consultar el plan de remediación y tareas asociadas",         "Remediación"),
     ("remediacion.gestionar","Gestionar remediación",        "Crear y actualizar tareas del plan de remediación",           "Remediación"),
@@ -435,6 +436,17 @@ PERMISOS_POR_ROL = {
         "eval.ver", "eval.responder",
         "evidencias.subir", "evidencias.ver",
     ],
+    # SegInf IDM (Gestión de identidades): administra toda la sección de Seguridad.
+    "seginf_idm": [
+        "usuarios.ver", "usuarios.gestionar",
+        "roles.gestionar",
+        "auditoria.ver",
+        "config.seguridad",
+    ],
+    # Proveedor (tercero externo): solo responde su cuestionario de seguridad.
+    "proveedor": [
+        "tprm.ver", "tprm.responder",
+    ],
 }
 
 ROLES_SISTEMA = [
@@ -442,6 +454,8 @@ ROLES_SISTEMA = [
     ("analista",        "Analista GRC",      "Gestión completa de evaluaciones, hallazgos y riesgos",        "#3b82f6"),
     ("auditor_externo", "Auditor Externo",   "Acceso de solo lectura para revisión independiente",           "#8b5cf6"),
     ("auditado",        "Auditado",          "Carga de evidencias y respuesta a controles asignados",        "#10b981"),
+    ("seginf_idm",      "SegInf IDM",        "Gestión de identidades: administra usuarios, roles y seguridad","#0ea5e9"),
+    ("proveedor",       "Proveedor",         "Tercero externo: responde el cuestionario de seguridad",       "#f97316"),
 ]
 
 

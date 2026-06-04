@@ -60,11 +60,21 @@ function App() {
   if (!user) return <LoginScreen onLogin={handleLogin}/>;
 
   /* ── Nav items ── */
-  const isAdmin    = user.rol === "admin";
-  const isAnalista = user.rol === "analista";
-  const isAuditado = user.rol === "auditado";
+  const isAdmin     = user.rol === "admin";
+  const isAnalista  = user.rol === "analista";
+  const isAuditado  = user.rol === "auditado";
+  const isSegInf    = user.rol === "seginf_idm";   // Gestión de identidades / seguridad
+  const isProveedor = user.rol === "proveedor";    // Tercero externo
 
-  const NAV = [
+  // El proveedor solo accede a su cuestionario de seguridad (Terceros).
+  // SegInf IDM se enfoca en la sección de Seguridad.
+  const NAV = isProveedor ? [
+    { id:"home",        label:"Inicio",          icon:"Home"          },
+    { id:"tprm",        label:"Terceros",        icon:"Building"      },
+  ] : isSegInf ? [
+    { id:"home",        label:"Inicio",          icon:"Home"          },
+    { id:"seguridad",   label:"Seguridad",       icon:"ShieldCheck"   },
+  ] : [
     { id:"home",        label:"Inicio",          icon:"Home"          },
     { id:"evaluaciones",label:"Evaluaciones",     icon:"ClipboardCheck"},
     // El auditado solo ve Hallazgos (sus asignados); el resto es auditor-only

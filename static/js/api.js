@@ -120,6 +120,8 @@ window.API = (() => {
     usuarios()               { return get("/api/usuarios"); },
     crearUsuario(d)          { return post("/api/usuarios", d); },
     actualizarUsuario(id, d) { return put(`/api/usuarios/${id}`, d); },
+    eliminarUsuario(id)      { return del(`/api/usuarios/${id}`); },
+    blanquearUsuario(id)     { return post(`/api/usuarios/${id}/blanquear`, {}); },
 
     /* Participantes */
     participantes()                     { return get("/api/participantes"); },

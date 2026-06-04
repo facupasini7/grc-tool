@@ -386,6 +386,92 @@ function AuditoriaScreen() {
   );
 }
 
+// ── Menú de acciones por usuario (bloquear / blanquear / eliminar) ──
+function UsuarioActionsMenu({ u, onReload, onEdit }) {
+  const [open, setOpen] = useStateMisc(false);
+  const [busy, setBusy] = useStateMisc(false);
+  const ref = useRefMisc(null);
+  const esAdminDefault = u.username === "admin";
+
+  useEffectMisc(() => {
+    if (!open) return;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const item = (icon, label, onClick, danger) => (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      style={{
+        display:"flex", alignItems:"center", gap:9, padding:"8px 12px", borderRadius:7,
+        border:"none", background:"transparent", cursor:"pointer", width:"100%", textAlign:"left",
+        fontSize:13, color: danger ? "var(--danger)" : "var(--text-primary)",
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = "var(--surface-2)"}
+      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+    >
+      {React.createElement(Icon[icon] || Icon.Settings, { size:14, style:{ flexShrink:0 } })}
+      {label}
+    </button>
+  );
+
+  const toggleBloqueo = async () => {
+    setBusy(true);
+    try { await API.actualizarUsuario(u.id, { activo: u.activo ? 0 : 1 }); onReload(); }
+    catch (e) { alert("Error: " + (e?.message || "no se pudo actualizar")); }
+    finally { setBusy(false); setOpen(false); }
+  };
+
+  const blanquear = async () => {
+    setBusy(true);
+    try {
+      const r = await API.blanquearUsuario(u.id);
+      alert("Contraseña temporal para @" + u.username + ":\n\n" + r.password_temporal +
+            "\n\nEntregásela al usuario. Deberá cambiarla en su próximo ingreso.");
+      onReload();
+    } catch (e) {
+      alert("No se pudo blanquear la contraseña. " + (e?.message === "403"
+        ? "El administrador por defecto sólo puede blanquearse desde Configuración." : ""));
+    } finally { setBusy(false); setOpen(false); }
+  };
+
+  const eliminar = async () => {
+    if (!confirm(`¿Eliminar al usuario @${u.username}? Esta acción no se puede deshacer.`)) return;
+    setBusy(true);
+    try { await API.eliminarUsuario(u.id); onReload(); }
+    catch (e) { alert("No se pudo eliminar el usuario. " + (e?.message === "403" ? "El administrador por defecto no puede eliminarse." : "")); }
+    finally { setBusy(false); setOpen(false); }
+  };
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button className="btn btn-ghost btn-icon" onClick={() => setOpen(o => !o)} title="Acciones">
+        <Icon.MoreH size={14}/>
+      </button>
+      {open && (
+        <div style={{
+          position:"absolute", right:0, top:"calc(100% + 4px)", zIndex:300,
+          background:"var(--surface-1)", border:"1px solid var(--border)", borderRadius:10,
+          boxShadow:"0 8px 24px rgba(0,0,0,.14)", minWidth:190, padding:6,
+          display:"flex", flexDirection:"column", gap:2,
+        }}>
+          {item("Edit", "Editar", () => { setOpen(false); onEdit(u); })}
+          {item(u.activo ? "Lock" : "Check", u.activo ? "Bloquear" : "Desbloquear", toggleBloqueo)}
+          {!esAdminDefault && item("Key", "Blanquear contraseña", blanquear)}
+          {!esAdminDefault && item("Trash", "Eliminar", eliminar, true)}
+          {esAdminDefault && (
+            <div style={{ fontSize:11, color:"var(--text-faint)", padding:"6px 12px", lineHeight:1.4 }}>
+              El admin por defecto no puede eliminarse; sólo él puede blanquear su contraseña (Configuración).
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Usuarios ──────────────────────────────────────────────────────
 function UsuariosScreen() {
   const [modal,   setModal]   = useStateMisc(false);
@@ -395,7 +481,7 @@ function UsuariosScreen() {
   const usuarios = data?.usuarios || data || [];
   const active   = usuarios.filter(u => u.activo);
 
-  const roleTone = { admin:"danger", analista:"accent", auditor_externo:"success", auditado:"warning" };
+  const roleTone = { admin:"danger", analista:"accent", auditor_externo:"success", auditado:"warning", seginf_idm:"info", proveedor:"neutral" };
 
   const open = (u) => { setEditing(u); setModal(true); };
 
@@ -450,7 +536,7 @@ function UsuariosScreen() {
                     <td>{u.activo ? <Badge tone="success" dot>Activo</Badge> : <Badge tone="neutral" dot>Inactivo</Badge>}</td>
                     <td><span className="mono" style={{ fontSize:11.5, color:"var(--text-muted)" }}>{u.ultimo_login ? fmtDate(u.ultimo_login) : "—"}</span></td>
                     <td onClick={e=>e.stopPropagation()}>
-                      <button className="btn btn-ghost btn-icon"><Icon.MoreH size={14}/></button>
+                      <UsuarioActionsMenu u={u} onReload={reload} onEdit={open}/>
                     </td>
                   </tr>
                 );
@@ -515,7 +601,7 @@ function UsuarioModal({ open, onClose, editing }) {
         <div className="field">
           <label>Rol</label>
           <select className="select" value={rol} onChange={e=>setRol(e.target.value)}>
-            {["admin","analista","auditor_externo","auditado"].map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
+            {["admin","analista","auditor_externo","auditado","seginf_idm","proveedor"].map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
           </select>
         </div>
         <div className="field"><label>{editing ? "Nueva contraseña (opcional)" : "Contraseña"}</label><input className="input" type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={editing ? "Dejar vacío para no cambiar" : "Mínimo 8 caracteres"}/></div>

@@ -378,6 +378,13 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return True
 
+    def _require_seguridad(self, user):
+        """Acceso a la sección de Seguridad: admin o SegInf IDM (gestión de identidades)."""
+        if user.get("rol") in ("admin", "seginf_idm"):
+            return True
+        self.send_json({"error": "Se requiere rol Administrador o SegInf IDM."}, 403)
+        return False
+
     def _require_perm(self, user, permiso: str) -> bool:
         """Chequea permiso granular. Admin siempre tiene acceso total."""
         if user.get("rol") == "admin":
@@ -396,8 +403,8 @@ class Handler(BaseHTTPRequestHandler):
         return False
 
     def _require_audit_access(self, user):
-        """Audit log: visible para admin y auditor_externo."""
-        if user.get("rol") in ("admin", "auditor_externo"):
+        """Audit log: visible para admin, auditor_externo y SegInf IDM."""
+        if user.get("rol") in ("admin", "auditor_externo", "seginf_idm"):
             return True
         self.send_json({"error": "Sin acceso al log de auditoría."}, 403)
         return False
@@ -655,7 +662,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json([dict(r) for r in rows])
 
         elif path == "/api/usuarios":
-            if not self._require_admin(user):
+            if not self._require_seguridad(user):
                 return
             with get_conn() as conn:
                 rows = conn.execute(
@@ -1088,14 +1095,14 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Catálogo de permisos ──
         elif path == "/api/admin/permisos":
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             with get_conn() as conn:
                 rows = conn.execute("SELECT * FROM permisos ORDER BY categoria, id").fetchall()
             self.send_json([dict(r) for r in rows])
 
         # ── Roles: lista ──
         elif path == "/api/admin/roles":
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             with get_conn() as conn:
                 roles = conn.execute("SELECT * FROM roles ORDER BY es_sistema DESC, nombre").fetchall()
                 result = []
@@ -1114,7 +1121,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Rol: detalle ──
         elif path.startswith("/api/admin/roles/") and path.count("/") == 4:
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             rid = int(path.split("/")[4])
             with get_conn() as conn:
                 rol = conn.execute("SELECT * FROM roles WHERE id=?", (rid,)).fetchone()
@@ -1136,7 +1143,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Política de seguridad (acceso / contraseñas) ──
         elif path == "/api/admin/seguridad":
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             from auth import get_seg_config
             self.send_json(get_seg_config())
 
@@ -1300,7 +1307,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Aprobar usuario pendiente (admin) ──
         if path.startswith("/api/usuarios/") and path.endswith("/aprobar"):
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             uid = int(path.split("/")[3])
             with get_conn() as conn:
                 conn.execute("UPDATE usuarios SET aprobado=1 WHERE id=?", (uid,))
@@ -1308,9 +1315,36 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True})
             return
 
+        # ── Blanqueo de contraseña: genera una temporal y fuerza el cambio ──
+        if path.startswith("/api/usuarios/") and path.endswith("/blanquear"):
+            if not self._require_seguridad(user): return
+            uid = int(path.split("/")[3])
+            with get_conn() as conn:
+                target = conn.execute("SELECT username FROM usuarios WHERE id=?", (uid,)).fetchone()
+            if not target:
+                self.send_json({"error": "Usuario no encontrado."}, 404); return
+            # El admin por defecto solo puede blanquear su propia contraseña (desde Configuración).
+            if target["username"] == "admin":
+                self.send_json({"error": "Sólo el administrador por defecto puede blanquear su propia contraseña, desde Configuración."}, 403); return
+            import secrets, string
+            alfabeto = string.ascii_letters + string.digits
+            temporal = "".join(secrets.choice(alfabeto) for _ in range(6)) + "Aa1!"
+            from auth import hash_password
+            with get_conn() as conn:
+                conn.execute(
+                    "UPDATE usuarios SET password_hash=?, debe_cambiar_password=1, "
+                    "intentos_fallidos=0, bloqueado_hasta=NULL, password_cambiada_en=datetime('now') WHERE id=?",
+                    (hash_password(temporal), uid),
+                )
+                conn.execute("DELETE FROM sesiones WHERE usuario_id=?", (uid,))
+            log_action(user["id"], user["username"], "blanquear_password", "usuario", uid,
+                       target["username"], self._ip())
+            self.send_json({"ok": True, "password_temporal": temporal})
+            return
+
         # ── Generar link de reset (admin) ──
         if path.startswith("/api/usuarios/") and path.endswith("/reset-link"):
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             uid = int(path.split("/")[3])
             from auth import create_reset_token, send_reset_email
             with get_conn() as conn:
@@ -1326,9 +1360,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, "reset_url": reset_url, "email_sent": email_sent})
             return
 
-        # ── Crear usuario (solo admin) ──
+        # ── Crear usuario (admin o SegInf IDM) ──
         if path == "/api/usuarios":
-            if not self._require_admin(user):
+            if not self._require_seguridad(user):
                 return
             from auth import hash_password, validate_password_policy
             username = body.get("username", "").strip()
@@ -1343,7 +1377,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": pw_err}, 400)
                 return
             rol_nuevo = body.get("rol", "analista")
-            if rol_nuevo not in ("admin", "analista", "auditor_externo", "auditado"):
+            if rol_nuevo not in ("admin", "analista", "auditor_externo", "auditado", "seginf_idm", "proveedor"):
                 rol_nuevo = "analista"
             try:
                 with get_conn() as conn:
@@ -2004,7 +2038,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Guardar política de seguridad ──
         elif path == "/api/admin/seguridad":
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             from auth import save_seg_config
             cfg = save_seg_config(body)
             log_action(user["id"], user["username"], "config_seguridad", ip=self._ip())
@@ -2053,7 +2087,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Roles: crear ──────────────────────────────────────────────────────
         elif path == "/api/admin/roles":
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             nombre = body.get("nombre", "").strip()
             if not nombre:
                 self.send_json({"error": "El nombre del rol es requerido."}, 400); return
@@ -2268,7 +2302,7 @@ class Handler(BaseHTTPRequestHandler):
         elif "/usuarios/" in path and path.endswith("/password"):
             # Cambiar contraseña: admin puede cambiar cualquiera, el usuario puede cambiar la suya
             uid = int(path.split("/")[3])
-            if user["id"] != uid and not self._require_admin(user):
+            if user["id"] != uid and not self._require_seguridad(user):
                 return
             from auth import hash_password, validate_password_policy
             new_pw = body.get("password", "")
@@ -2283,11 +2317,12 @@ class Handler(BaseHTTPRequestHandler):
 
         elif "/usuarios/" in path:
             uid = int(path.split("/")[-1])
-            if not self._require_admin(user):
+            if not self._require_seguridad(user):
                 return
             campos = ["nombre", "email", "rol", "activo"]
             # Validar rol si viene en el body
-            if "rol" in body and body["rol"] not in ("admin", "analista", "auditor_externo", "auditado"):
+            if "rol" in body and body["rol"] not in (
+                "admin", "analista", "auditor_externo", "auditado", "seginf_idm", "proveedor"):
                 self.send_json({"error": "Rol inválido."}, 400)
                 return
             sets   = ", ".join(f"{c}=?" for c in campos if c in body)
@@ -2314,7 +2349,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Roles: actualizar (nombre/desc/color) o asignar permisos ─────────
         elif path.startswith("/api/admin/roles/"):
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             parts = path.split("/")
             rid = int(parts[4])
             with get_conn() as conn:
@@ -2462,6 +2497,25 @@ class Handler(BaseHTTPRequestHandler):
                 )
             self.send_json({"ok": True})
 
+        # ── Eliminar usuario (admin o SegInf IDM) ──
+        elif "/usuarios/" in path:
+            if not self._require_seguridad(user): return
+            uid = int(path.split("/")[-1])
+            with get_conn() as conn:
+                target = conn.execute("SELECT username FROM usuarios WHERE id=?", (uid,)).fetchone()
+                if not target:
+                    self.send_json({"error": "Usuario no encontrado."}, 404); return
+                # El admin por defecto de la herramienta no puede eliminarse.
+                if target["username"] == "admin":
+                    self.send_json({"error": "El administrador por defecto no puede eliminarse."}, 403); return
+                if uid == user["id"]:
+                    self.send_json({"error": "No podés eliminar tu propia cuenta."}, 403); return
+                conn.execute("DELETE FROM sesiones WHERE usuario_id=?", (uid,))
+                conn.execute("DELETE FROM usuarios WHERE id=?", (uid,))
+            log_action(user["id"], user["username"], "eliminar_usuario",
+                       "usuario", uid, target["username"], self._ip())
+            self.send_json({"ok": True})
+
         elif "/riesgos/" in path:
             if not self._require_write(user): return
             rid = int(path.split("/")[-1])
@@ -2505,7 +2559,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Roles: eliminar ────────────────────────────────────────────────────
         elif path.startswith("/api/admin/roles/"):
-            if not self._require_admin(user): return
+            if not self._require_seguridad(user): return
             rid = int(path.split("/")[4])
             with get_conn() as conn:
                 rol = conn.execute("SELECT * FROM roles WHERE id=?", (rid,)).fetchone()
